@@ -26,7 +26,7 @@ This guide will help you deploy your AMI Super App to AWS Lightsail.
 ```bash
 # Download the SSH key from Lightsail console
 # Then connect via SSH
-ssh -i ~/.ssh/your-key.pem ubuntu@your-instance-ip
+ssh -i ~/.ssh/your-key.pem ec2-user@your-instance-ip
 ```
 
 ## Step 2: Prepare Your Instance
@@ -34,14 +34,17 @@ ssh -i ~/.ssh/your-key.pem ubuntu@your-instance-ip
 ### 2.1 Install Docker and Docker Compose
 ```bash
 # Update system
-sudo apt update && sudo apt upgrade -y
+sudo yum update -y
 
 # Install Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
+sudo yum install -y docker
+
+# Start and enable Docker service
+sudo systemctl start docker
+sudo systemctl enable docker
 
 # Add user to docker group
-sudo usermod -aG docker ubuntu
+sudo usermod -aG docker ec2-user
 
 # Install Docker Compose
 sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
@@ -54,7 +57,7 @@ exit
 
 ### 2.2 Install Git
 ```bash
-sudo apt install git -y
+sudo yum install -y git
 ```
 
 ## Step 3: Deploy Your Application
@@ -116,10 +119,14 @@ Your app will be available at:
 ### 5.2 Set Up SSL with Nginx
 ```bash
 # Install Nginx
-sudo apt install nginx -y
+sudo yum install -y nginx
+
+# Start and enable Nginx
+sudo systemctl start nginx
+sudo systemctl enable nginx
 
 # Create Nginx configuration
-sudo nano /etc/nginx/sites-available/ami-super-app
+sudo nano /etc/nginx/conf.d/ami-super-app.conf
 ```
 
 **Add this configuration:**
@@ -143,13 +150,12 @@ server {
 ```
 
 ```bash
-# Enable the site
-sudo ln -s /etc/nginx/sites-available/ami-super-app /etc/nginx/sites-enabled/
+# Test Nginx configuration
 sudo nginx -t
 sudo systemctl restart nginx
 
 # Install Certbot for SSL
-sudo apt install certbot python3-certbot-nginx -y
+sudo yum install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
 ```
 
@@ -219,6 +225,7 @@ df -h
 
 # Monitor system resources
 htop
+# Note: If htop is not available, use: top
 ```
 
 ## Security Considerations

@@ -4,16 +4,20 @@ echo "🔧 Setting up AWS Lightsail instance for AMI Super App..."
 
 # Update system
 echo "📦 Updating system packages..."
-sudo apt update && sudo apt upgrade -y
+sudo yum update -y
 
 # Install Docker
 echo "🐳 Installing Docker..."
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
+sudo yum install -y docker
+
+# Start and enable Docker service
+echo "🚀 Starting Docker service..."
+sudo systemctl start docker
+sudo systemctl enable docker
 
 # Add user to docker group
 echo "👤 Adding user to docker group..."
-sudo usermod -aG docker ubuntu
+sudo usermod -aG docker ec2-user
 
 # Install Docker Compose
 echo "📋 Installing Docker Compose..."
@@ -22,16 +26,16 @@ sudo chmod +x /usr/local/bin/docker-compose
 
 # Install Git
 echo "📚 Installing Git..."
-sudo apt install git -y
+sudo yum install -y git
 
-# Install htop for monitoring
+# Install monitoring tools
 echo "📊 Installing monitoring tools..."
-sudo apt install htop -y
+sudo yum install -y htop
 
 # Create app directory
 echo "📁 Creating application directory..."
-mkdir -p /home/ubuntu/apps
-cd /home/ubuntu/apps
+mkdir -p /home/ec2-user/apps
+cd /home/ec2-user/apps
 
 echo "✅ Lightsail instance setup completed!"
 echo ""

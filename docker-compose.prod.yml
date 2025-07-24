@@ -3,6 +3,8 @@ version: '3.8'
 services:
   # MySQL Database
   mysql:
+    env_file:
+      - .env.production
     image: mysql:8.0
     container_name: ami-super-app-mysql
     restart: unless-stopped
@@ -25,6 +27,8 @@ services:
 
   # Next.js Application
   app:
+    env_file:
+      - .env.production
     build: .
     container_name: ami-super-app
     restart: unless-stopped
