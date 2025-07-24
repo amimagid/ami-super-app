@@ -1,0 +1,24 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: ami-super-app-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: superapp123
+      MYSQL_DATABASE: ami_super_app
+      MYSQL_USER: superapp_user
+      MYSQL_PASSWORD: superapp_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - superapp-network
+
+volumes:
+  mysql_data:
+
+networks:
+  superapp-network:
+    driver: bridge 
