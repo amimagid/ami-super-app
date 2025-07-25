@@ -91,6 +91,8 @@ HealthEntry.init(
     sequelize,
     tableName: 'health_entries',
     timestamps: true,
-    underscored: true,
+    underscored: false,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
   }
 ) 

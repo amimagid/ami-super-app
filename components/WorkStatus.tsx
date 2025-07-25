@@ -15,7 +15,9 @@ import {
   Save,
   X,
   UserPlus,
-  MessageCircle
+  MessageCircle,
+  CheckCircle,
+  FlaskConical
 } from 'lucide-react'
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from 'date-fns'
 
@@ -75,6 +77,15 @@ export default function WorkStatus() {
       color: 'text-purple-600',
       bgColor: 'bg-purple-100',
       members: []
+    },
+
+    {
+      id: 'rnd',
+      name: 'R&D',
+      iconName: 'flask-conical',
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-100',
+      members: []
     }
   ])
   
@@ -118,6 +129,28 @@ export default function WorkStatus() {
     color: 'text-blue-600',
     bgColor: 'bg-blue-100'
   })
+
+  const [showEditDomainModal, setShowEditDomainModal] = useState(false)
+  const [editingDomain, setEditingDomain] = useState<{
+    id: string
+    name: string
+    iconName: string
+    color: string
+    bgColor: string
+  } | null>(null)
+  const [editingDomainValues, setEditingDomainValues] = useState({
+    name: '',
+    iconName: 'shield',
+    color: 'text-blue-600',
+    bgColor: 'bg-blue-100'
+  })
+
+  const [showDeleteDomainModal, setShowDeleteDomainModal] = useState(false)
+  const [deletingDomain, setDeletingDomain] = useState<{
+    id: string
+    name: string
+    memberCount: number
+  } | null>(null)
 
   const [activeTab, setActiveTab] = useState<string>('')
   const [loading, setLoading] = useState(true)
@@ -229,6 +262,89 @@ export default function WorkStatus() {
     }
   }
 
+  const editDomain = async () => {
+    if (!editingDomain || !editingDomainValues.name) return
+
+    const domain = {
+      id: editingDomain.id,
+      name: editingDomainValues.name,
+      iconName: editingDomainValues.iconName,
+      color: editingDomainValues.color,
+      bgColor: editingDomainValues.bgColor
+    }
+
+    try {
+      const response = await fetch('/api/work-status', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ...domain, type: 'domain' }),
+      })
+      
+      if (response.ok) {
+        await loadWorkStatus()
+        setShowEditDomainModal(false)
+        setEditingDomain(null)
+        setEditingDomainValues({ name: '', iconName: 'shield', color: 'text-blue-600', bgColor: 'bg-blue-100' })
+      } else {
+        throw new Error('Failed to update domain')
+      }
+    } catch (error) {
+      console.error('Error updating domain:', error)
+      alert('Failed to update domain. Please try again.')
+    }
+  }
+
+  const deleteDomain = async () => {
+    if (!deletingDomain) return
+
+    try {
+      const response = await fetch(`/api/work-status?domainId=${encodeURIComponent(deletingDomain.id)}`, {
+        method: 'DELETE',
+      })
+      
+      if (response.ok) {
+        await loadWorkStatus()
+        setShowDeleteDomainModal(false)
+        setDeletingDomain(null)
+        // If the deleted domain was active, switch to the first available domain
+        if (activeTab === deletingDomain.id) {
+          const remainingDomains = domains.filter(d => d.id !== deletingDomain.id)
+          if (remainingDomains.length > 0) {
+            setActiveTab(remainingDomains[0].id)
+          }
+        }
+      } else {
+        const errorData = await response.json()
+        throw new Error(`Failed to delete domain: ${errorData.error || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Error deleting domain:', error)
+      alert(`Failed to delete domain: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  const openEditDomainModal = (domain: Domain) => {
+    setEditingDomain(domain)
+    setEditingDomainValues({
+      name: domain.name,
+      iconName: domain.iconName,
+      color: domain.color,
+      bgColor: domain.bgColor
+    })
+    setShowEditDomainModal(true)
+  }
+
+  const openDeleteDomainModal = (domain: Domain) => {
+    setDeletingDomain({
+      id: domain.id,
+      name: domain.name,
+      memberCount: domain.members.length
+    })
+    setShowDeleteDomainModal(true)
+  }
+
   const removeMember = async (domainId: string, memberId: string) => {
     // Show confirmation dialog
     const confirmed = window.confirm('Are you sure you want to delete this team member? This will remove all their weekly status entries.')
@@ -329,9 +445,65 @@ export default function WorkStatus() {
         return <FileCheck size={24} />
       case 'zap':
         return <Zap size={24} />
+      case 'check-circle':
+        return <CheckCircle size={24} />
+      case 'flask-conical':
+        return <FlaskConical size={24} />
       default:
         return <Shield size={24} />
     }
+  }
+
+  // Calculate total teammates and status completion
+  const getStatusStats = () => {
+    const weekStart = getCurrentWeekKey(selectedWeek)
+    const totalTeammates = domains.reduce((total, domain) => total + domain.members.length, 0)
+    
+    let teammatesWithStatus = 0
+    domains.forEach(domain => {
+      domain.members.forEach(member => {
+        const status = getMemberStatus(member, weekStart)
+        if (status && (status.currentWeek || status.nextWeek)) {
+          teammatesWithStatus++
+        }
+      })
+    })
+    
+    const teammatesWithoutStatus = totalTeammates - teammatesWithStatus
+    
+    return {
+      total: totalTeammates,
+      withStatus: teammatesWithStatus,
+      withoutStatus: teammatesWithoutStatus
+    }
+  }
+
+  // Sort domains in the specified order
+  const getSortedDomains = () => {
+    const domainOrder = [
+      'platform-security',    // Platform
+      'advanced-protection',  // Advanced
+      'rnd',                 // R&D Staff
+      'threat-protection',    // Threat
+      'compliance'           // Compliance
+    ]
+    
+    return [...domains].sort((a, b) => {
+      const aIndex = domainOrder.indexOf(a.id)
+      const bIndex = domainOrder.indexOf(b.id)
+      
+      // If both domains are in the order list, sort by their position
+      if (aIndex !== -1 && bIndex !== -1) {
+        return aIndex - bIndex
+      }
+      
+      // If only one is in the order list, prioritize it
+      if (aIndex !== -1) return -1
+      if (bIndex !== -1) return 1
+      
+      // If neither is in the order list, sort alphabetically
+      return a.name.localeCompare(b.name)
+    })
   }
 
   return (
@@ -339,8 +511,14 @@ export default function WorkStatus() {
       {/* Header */}
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Work Status</h1>
-          <p className="text-gray-600">Manage weekly status updates across all domains</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Teammates Status</h1>
+          <div className="flex items-center space-x-4 text-sm text-gray-600">
+            <span>Total teammates: {getStatusStats().total}</span>
+            <span>•</span>
+            <span className={getStatusStats().withoutStatus > 0 ? 'text-orange-600 font-medium' : 'text-green-600 font-medium'}>
+              {getStatusStats().withoutStatus} still need{getStatusStats().withoutStatus !== 1 ? '' : 's'} status for this week
+            </span>
+          </div>
         </div>
         <button
           onClick={() => setShowAddDomainModal(true)}
@@ -383,32 +561,45 @@ export default function WorkStatus() {
           {/* Tab Navigation */}
           <div className="border-b border-gray-200">
             <nav className="-mb-px flex space-x-8 overflow-x-auto">
-              {domains.map(domain => (
-                <button
-                  key={domain.id}
-                  onClick={() => setActiveTab(domain.id)}
-                  className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                    activeTab === domain.id
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <div className={`p-1.5 rounded ${domain.bgColor}`}>
-                    <div className={`${domain.color} text-sm`}>
-                      {getIcon(domain.iconName)}
+              {getSortedDomains().map(domain => (
+                <div key={domain.id} className="flex items-center space-x-1 group">
+                  <button
+                    onClick={() => setActiveTab(domain.id)}
+                    className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                      activeTab === domain.id
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className={`p-1.5 rounded ${domain.bgColor}`}>
+                      <div className={`${domain.color} text-sm`}>
+                        {getIcon(domain.iconName)}
+                      </div>
                     </div>
+                    <span>{domain.name}</span>
+                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                      {domain.members.length}
+                    </span>
+                  </button>
+                  <div className="flex items-center space-x-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openEditDomainModal(domain)
+                      }}
+                      className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                      title="Edit domain"
+                    >
+                      <Edit3 size={14} />
+                    </button>
                   </div>
-                  <span>{domain.name}</span>
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                    {domain.members.length}
-                  </span>
-                </button>
+                </div>
               ))}
             </nav>
           </div>
 
                     {/* Tab Content */}
-          {domains.map(domain => (
+          {getSortedDomains().map(domain => (
             <div
               key={domain.id}
               className={`mt-6 ${activeTab === domain.id ? 'block' : 'hidden'}`}
@@ -559,45 +750,40 @@ export default function WorkStatus() {
                           {editingStatus?.domainId === domain.id && 
                            editingStatus?.memberId === member.id && 
                            editingStatus?.field === 'currentWeek' ? (
-                            <div className="flex space-x-2">
-                              <textarea
-                                value={editingValues.currentWeek}
-                                onChange={(e) => setEditingValues({ ...editingValues, currentWeek: e.target.value })}
-                                className="input-field flex-1"
-                                rows={3}
-                                placeholder="What was accomplished this week..."
-                              />
-                              <button
-                                onClick={async () => {
-                                  await updateStatus(domain.id, member.id, 'currentWeek', editingValues.currentWeek)
-                                  setEditingStatus(null)
-                                  setEditingValues({ currentWeek: '', nextWeek: '' })
-                                }}
-                                className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
-                              >
-                                <Save size={16} />
-                              </button>
-                            </div>
+                            <textarea
+                              value={editingValues.currentWeek}
+                              onChange={(e) => setEditingValues({ ...editingValues, currentWeek: e.target.value })}
+                              onBlur={async () => {
+                                await updateStatus(domain.id, member.id, 'currentWeek', editingValues.currentWeek)
+                                setEditingStatus(null)
+                                setEditingValues({ currentWeek: '', nextWeek: '' })
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && e.metaKey) {
+                                  e.preventDefault()
+                                  e.currentTarget.blur()
+                                }
+                              }}
+                              className="input-field w-full"
+                              rows={3}
+                              placeholder="What was accomplished this week..."
+                              autoFocus
+                            />
                           ) : (
-                            <div className="flex space-x-2">
-                              <div className="flex-1 p-3 bg-gray-50 rounded-lg min-h-[60px]">
-                                {status.currentWeek || (
-                                  <span className="text-gray-400 italic">No status added yet</span>
-                                )}
-                              </div>
-                              <button
-                                onClick={() => {
-                                  setEditingValues({ currentWeek: status.currentWeek, nextWeek: status.nextWeek })
-                                  setEditingStatus({
-                                    domainId: domain.id,
-                                    memberId: member.id,
-                                    field: 'currentWeek'
-                                  })
-                                }}
-                                className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-                              >
-                                <Edit3 size={16} />
-                              </button>
+                            <div 
+                              onClick={() => {
+                                setEditingValues({ currentWeek: status.currentWeek, nextWeek: status.nextWeek })
+                                setEditingStatus({
+                                  domainId: domain.id,
+                                  memberId: member.id,
+                                  field: 'currentWeek'
+                                })
+                              }}
+                              className="p-3 bg-gray-50 rounded-lg min-h-[60px] cursor-pointer hover:bg-gray-100 transition-colors"
+                            >
+                              {status.currentWeek || (
+                                <span className="text-gray-400 italic">Click to add status...</span>
+                              )}
                             </div>
                           )}
                         </div>
@@ -609,45 +795,40 @@ export default function WorkStatus() {
                           {editingStatus?.domainId === domain.id && 
                            editingStatus?.memberId === member.id && 
                            editingStatus?.field === 'nextWeek' ? (
-                            <div className="flex space-x-2">
-                              <textarea
-                                value={editingValues.nextWeek}
-                                onChange={(e) => setEditingValues({ ...editingValues, nextWeek: e.target.value })}
-                                className="input-field flex-1"
-                                rows={3}
-                                placeholder="What's planned for next week..."
-                              />
-                              <button
-                                onClick={async () => {
-                                  await updateStatus(domain.id, member.id, 'nextWeek', editingValues.nextWeek)
-                                  setEditingStatus(null)
-                                  setEditingValues({ currentWeek: '', nextWeek: '' })
-                                }}
-                                className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
-                              >
-                                <Save size={16} />
-                              </button>
-                            </div>
+                            <textarea
+                              value={editingValues.nextWeek}
+                              onChange={(e) => setEditingValues({ ...editingValues, nextWeek: e.target.value })}
+                              onBlur={async () => {
+                                await updateStatus(domain.id, member.id, 'nextWeek', editingValues.nextWeek)
+                                setEditingStatus(null)
+                                setEditingValues({ currentWeek: '', nextWeek: '' })
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && e.metaKey) {
+                                  e.preventDefault()
+                                  e.currentTarget.blur()
+                                }
+                              }}
+                              className="input-field w-full"
+                              rows={3}
+                              placeholder="What's planned for next week..."
+                              autoFocus
+                            />
                           ) : (
-                            <div className="flex space-x-2">
-                              <div className="flex-1 p-3 bg-gray-50 rounded-lg min-h-[60px]">
-                                {status.nextWeek || (
-                                  <span className="text-gray-400 italic">No plans added yet</span>
-                                )}
-                              </div>
-                              <button
-                                onClick={() => {
-                                  setEditingValues({ currentWeek: status.currentWeek, nextWeek: status.nextWeek })
-                                  setEditingStatus({
-                                    domainId: domain.id,
-                                    memberId: member.id,
-                                    field: 'nextWeek'
-                                  })
-                                }}
-                                className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-                              >
-                                <Edit3 size={16} />
-                              </button>
+                            <div 
+                              onClick={() => {
+                                setEditingValues({ currentWeek: status.currentWeek, nextWeek: status.nextWeek })
+                                setEditingStatus({
+                                  domainId: domain.id,
+                                  memberId: member.id,
+                                  field: 'nextWeek'
+                                })
+                              }}
+                              className="p-3 bg-gray-50 rounded-lg min-h-[60px] cursor-pointer hover:bg-gray-100 transition-colors"
+                            >
+                              {status.nextWeek || (
+                                <span className="text-gray-400 italic">Click to add plans...</span>
+                              )}
                             </div>
                           )}
                         </div>
@@ -824,6 +1005,167 @@ export default function WorkStatus() {
           </div>
         </div>
       )}
+
+      {/* Edit Domain Modal */}
+      {showEditDomainModal && editingDomain && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold mb-4">Edit Domain</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Domain Name
+                </label>
+                <input
+                  type="text"
+                  value={editingDomainValues.name}
+                  onChange={(e) => setEditingDomainValues({...editingDomainValues, name: e.target.value})}
+                  className="input-field"
+                  placeholder="e.g., Data Protection"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Icon
+                </label>
+                <select
+                  value={editingDomainValues.iconName}
+                  onChange={(e) => setEditingDomainValues({...editingDomainValues, iconName: e.target.value})}
+                  className="input-field"
+                >
+                  <option value="shield">Shield (Security)</option>
+                  <option value="alert-triangle">Alert Triangle (Threat)</option>
+                  <option value="file-check">File Check (Compliance)</option>
+                  <option value="zap">Zap (Advanced)</option>
+                  <option value="check-circle">Check Circle (QA)</option>
+                  <option value="flask-conical">Flask Conical (R&D)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Color Theme
+                </label>
+                <select
+                  value={`${editingDomainValues.color} ${editingDomainValues.bgColor}`}
+                  onChange={(e) => {
+                    const [color, bgColor] = e.target.value.split(' ')
+                    setEditingDomainValues({...editingDomainValues, color, bgColor})
+                  }}
+                  className="input-field"
+                >
+                  <option value="text-blue-600 bg-blue-100">Blue</option>
+                  <option value="text-red-600 bg-red-100">Red</option>
+                  <option value="text-green-600 bg-green-100">Green</option>
+                  <option value="text-purple-600 bg-purple-100">Purple</option>
+                  <option value="text-orange-600 bg-orange-100">Orange</option>
+                  <option value="text-indigo-600 bg-indigo-100">Indigo</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex space-x-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowEditDomainModal(false)
+                  setEditingDomain(null)
+                  setEditingDomainValues({ name: '', iconName: 'shield', color: 'text-blue-600', bgColor: 'bg-blue-100' })
+                }}
+                className="btn-secondary flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={editDomain}
+                className="btn-primary flex-1"
+              >
+                Update Domain
+              </button>
+            </div>
+
+            {/* Delete Section */}
+            <div className="mt-8 pt-6 border-t border-gray-200">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                <div className="flex items-start space-x-3">
+                  <div className="p-1 bg-red-100 rounded">
+                    <X className="h-4 w-4 text-red-600" />
+                  </div>
+                  <div className="text-sm text-red-800">
+                    <p>Deleting this domain will permanently remove it and all associated team members and their status data.</p>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowEditDomainModal(false)
+                  setEditingDomain(null)
+                  setEditingDomainValues({ name: '', iconName: 'shield', color: 'text-blue-600', bgColor: 'bg-blue-100' })
+                  openDeleteDomainModal(editingDomain!)
+                }}
+                className="btn-danger w-full"
+              >
+                Delete Domain
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Domain Modal */}
+      {showDeleteDomainModal && deletingDomain && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-2 bg-red-100 rounded-lg">
+                <X className="h-6 w-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Delete Domain</h3>
+            </div>
+            
+            <div className="mb-6">
+              <p className="text-gray-700 mb-4">
+                Are you sure you want to delete the domain <strong>"{deletingDomain.name}"</strong>?
+              </p>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <div className="flex items-start space-x-3">
+                  <div className="p-1 bg-red-100 rounded">
+                    <X className="h-4 w-4 text-red-600" />
+                  </div>
+                  <div className="text-sm text-red-800">
+                    <p className="font-medium mb-1">This action cannot be undone!</p>
+                    <ul className="list-disc list-inside space-y-1">
+                      <li>The domain will be permanently deleted</li>
+                      <li>All {deletingDomain.memberCount} team member{deletingDomain.memberCount !== 1 ? 's' : ''} will be removed</li>
+                      <li>All weekly status entries will be lost</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={() => {
+                  setShowDeleteDomainModal(false)
+                  setDeletingDomain(null)
+                }}
+                className="btn-secondary flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={deleteDomain}
+                className="btn-danger flex-1"
+              >
+                Delete Domain
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 } 

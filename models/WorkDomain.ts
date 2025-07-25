@@ -1,5 +1,5 @@
 import { Model, DataTypes } from 'sequelize';
-import sequelize from '../lib/database';
+import sequelize from '@/lib/database';
 
 class WorkDomain extends Model {
   public id!: string;

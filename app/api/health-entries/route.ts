@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sequelize from '@/lib/database';
-import HealthEntry from '@/models/HealthEntry';
+import { HealthEntry } from '@/models/HealthEntry';
 
 // Initialize database connection
 async function initDB() {

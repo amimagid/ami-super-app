@@ -90,11 +90,32 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PUT - Update weekly status or member details
+// PUT - Update weekly status, member details, or domain
 export async function PUT(request: NextRequest) {
   try {
     await initDB();
     const body = await request.json();
+    
+    // Check if this is a domain update
+    if (body.type === 'domain') {
+      const domain = await WorkDomain.findByPk(body.id);
+      if (!domain) {
+        return NextResponse.json(
+          { error: 'Domain not found' },
+          { status: 404 }
+        );
+      }
+      
+      // Update domain details
+      await domain.update({
+        name: body.name,
+        iconName: body.iconName,
+        color: body.color,
+        bgColor: body.bgColor,
+      });
+      
+      return NextResponse.json(domain);
+    }
     
     // Check if this is a member update (has name, email, or slackChannelId)
     if (body.name || body.email || body.slackChannelId) {
@@ -147,16 +168,32 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// DELETE - Delete team member
+// DELETE - Delete team member or domain
 export async function DELETE(request: NextRequest) {
   try {
     await initDB();
     const { searchParams } = new URL(request.url);
     const memberId = searchParams.get('memberId');
+    const domainId = searchParams.get('domainId');
+    
+    if (domainId) {
+      // Delete domain
+      const domain = await WorkDomain.findByPk(domainId);
+      if (!domain) {
+        return NextResponse.json(
+          { error: 'Domain not found' },
+          { status: 404 }
+        );
+      }
+      
+      // Delete the domain (cascade will handle members and statuses)
+      await domain.destroy();
+      return NextResponse.json({ message: 'Domain deleted successfully' });
+    }
     
     if (!memberId) {
       return NextResponse.json(
-        { error: 'Member ID is required' },
+        { error: 'Member ID or Domain ID is required' },
         { status: 400 }
       );
     }
@@ -178,9 +215,9 @@ export async function DELETE(request: NextRequest) {
     await member.destroy();
     return NextResponse.json({ message: 'Team member deleted successfully' });
   } catch (error) {
-    console.error('Error deleting team member:', error);
+    console.error('Error deleting:', error);
     return NextResponse.json(
-      { error: 'Failed to delete team member' },
+      { error: 'Failed to delete' },
       { status: 500 }
     );
   }

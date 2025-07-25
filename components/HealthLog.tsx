@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Upload, FileText, Calendar, Activity, Scale, Heart, Clock, Edit3, Save, X, Plus, Mail } from 'lucide-react'
+import { Upload, FileText, Calendar, Activity, Scale, Heart, Clock, Edit3, Save, X, Plus, Mail, ChevronDown, ChevronRight } from 'lucide-react'
 import { format, parseISO, subDays, subWeeks, subMonths, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import jsPDF from 'jspdf'
@@ -35,6 +35,7 @@ export default function HealthLog() {
   const [weightTimeRange, setWeightTimeRange] = useState<'day' | 'week' | 'month' | 'all'>('week')
   const [bpArmFilter, setBpArmFilter] = useState<'right' | 'left' | 'both'>('both')
   const [exportingEmail, setExportingEmail] = useState(false)
+  const [chartsExpanded, setChartsExpanded] = useState(false)
   const [newEntry, setNewEntry] = useState<Partial<HealthEntry>>({
     date: new Date().toISOString().split('T')[0],
     weight: null,
@@ -396,6 +397,69 @@ export default function HealthLog() {
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
   }
 
+  // Calculate interesting insights
+  const calculateInsights = () => {
+    if (entries.length === 0) return null
+
+    const weightEntries = entries.filter(entry => entry.weight !== null)
+    const bpEntries = entries.filter(entry => 
+      entry.bpAMRight || entry.bpAMLeft || entry.bpPMRight || entry.bpPMLeft
+    )
+    const workoutEntries = entries.filter(entry => entry.workout)
+
+    // Weight insights
+    const weights = weightEntries.map(entry => entry.weight!)
+    const weightChange = weights.length > 1 ? weights[0] - weights[weights.length - 1] : 0
+    const weightTrend = weightChange > 0 ? 'Gained' : weightChange < 0 ? 'Lost' : 'Stable'
+    const weightChangeAbs = Math.abs(weightChange)
+
+    // BP insights
+    const allBPReadings = []
+    for (const entry of bpEntries) {
+      if (entry.bpAMRight) allBPReadings.push(parseBP(entry.bpAMRight))
+      if (entry.bpAMLeft) allBPReadings.push(parseBP(entry.bpAMLeft))
+      if (entry.bpPMRight) allBPReadings.push(parseBP(entry.bpPMRight))
+      if (entry.bpPMLeft) allBPReadings.push(parseBP(entry.bpPMLeft))
+    }
+    
+    const validBPReadings = allBPReadings.filter(Boolean) as number[][]
+    const highBPCount = validBPReadings.filter(([systolic, diastolic]) => 
+      systolic >= 140 || diastolic >= 90
+    ).length
+    const bpHealthPercentage = validBPReadings.length > 0 
+      ? Math.round(((validBPReadings.length - highBPCount) / validBPReadings.length) * 100)
+      : 0
+
+    // Workout insights
+    const workoutTypes = workoutEntries.map(entry => entry.workout!.toLowerCase())
+    const strengthCount = workoutTypes.filter(w => w.includes('strength')).length
+    const cardioCount = workoutTypes.filter(w => 
+      w.includes('run') || w.includes('jog') || w.includes('elliptical') || w.includes('hiit')
+    ).length
+    const skillCount = workoutTypes.filter(w => w.includes('skill')).length
+
+    // Consistency insights
+    const totalDays = entries.length
+    const daysWithData = entries.filter(entry => 
+      entry.weight !== null || entry.bpAMRight || entry.bpAMLeft || entry.bpPMRight || entry.bpPMLeft || entry.workout
+    ).length
+    const consistencyPercentage = Math.round((daysWithData / totalDays) * 100)
+
+    return {
+      weightChange,
+      weightTrend,
+      weightChangeAbs,
+      bpHealthPercentage,
+      highBPCount,
+      totalBPReadings: validBPReadings.length,
+      strengthCount,
+      cardioCount,
+      skillCount,
+      consistencyPercentage,
+      totalWorkouts: workoutEntries.length
+    }
+  }
+
   // Export to email function
   const exportToEmail = async () => {
     setExportingEmail(true)
@@ -607,186 +671,290 @@ export default function HealthLog() {
         </div>
       </div>
 
-      {/* BP Averages */}
+      {/* Summary Cards */}
       {entries.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
-          <div className="card">
-            <div className="flex items-center space-x-3">
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <Calendar className="h-6 w-6 text-blue-600" />
+        <div className="space-y-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="card">
+              <div className="flex items-center space-x-3">
+                <div className="p-3 bg-green-100 rounded-lg">
+                  <Scale className="h-6 w-6 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Current Weight</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {entries[0]?.weight ? `${entries[0].weight} kg` : 'N/A'}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Entries</p>
-                <p className="text-2xl font-bold text-gray-900">{entries.length}</p>
+            </div>
+
+            {/* Consolidated BP Averages Widget */}
+            <div className="card">
+              <div className="flex items-center space-x-4">
+                <div className="p-3 bg-red-100 rounded-lg">
+                  <Heart className="h-6 w-6 text-red-600" />
+                </div>
+                {(() => {
+                  const averages = calculateBPAverages()
+                  return (
+                    <div className="grid grid-cols-3 gap-4 flex-1">
+                      <div className="text-center">
+                        <p className="text-xs text-red-600 font-medium">Daily</p>
+                        <p className="text-lg font-bold text-gray-900">
+                          {averages.daily ? `${averages.daily.systolic}/${averages.daily.diastolic}` : 'N/A'}
+                        </p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-orange-600 font-medium">Weekly</p>
+                        <p className="text-lg font-bold text-gray-900">
+                          {averages.weekly ? `${averages.weekly.systolic}/${averages.weekly.diastolic}` : 'N/A'}
+                        </p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-purple-600 font-medium">Monthly</p>
+                        <p className="text-lg font-bold text-gray-900">
+                          {averages.monthly ? `${averages.monthly.systolic}/${averages.monthly.diastolic}` : 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                })()}
               </div>
             </div>
           </div>
 
+          {/* Health Insights Widget - Full Width */}
           <div className="card">
-            <div className="flex items-center space-x-3">
-              <div className="p-3 bg-green-100 rounded-lg">
-                <Scale className="h-6 w-6 text-green-600" />
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-3 bg-purple-100 rounded-lg">
+                <Activity className="h-6 w-6 text-purple-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Current Weight</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {entries[0]?.weight ? `${entries[0].weight} kg` : 'N/A'}
-                </p>
+                <p className="text-sm text-gray-600">Health Insights</p>
+                <p className="text-lg font-semibold text-gray-900">Key Trends & Analytics</p>
               </div>
             </div>
+            {(() => {
+              const insights = calculateInsights()
+              if (!insights) return <p className="text-gray-500 text-sm">No data available</p>
+              
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Weight Trend:</span>
+                      <span className={`text-sm font-medium ${
+                        insights.weightTrend === 'Lost' ? 'text-green-600' : 
+                        insights.weightTrend === 'Gained' ? 'text-red-600' : 'text-gray-600'
+                      }`}>
+                        {insights.weightTrend} {insights.weightChangeAbs > 0 ? `${insights.weightChangeAbs.toFixed(1)}kg` : ''}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Total BP Readings:</span>
+                      <span className="text-sm font-medium text-blue-600">
+                        {insights.totalBPReadings}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">BP Health Score:</span>
+                      <span className={`text-sm font-medium ${
+                        insights.bpHealthPercentage >= 80 ? 'text-green-600' : 
+                        insights.bpHealthPercentage >= 60 ? 'text-yellow-600' : 'text-red-600'
+                      }`}>
+                        {insights.bpHealthPercentage}% healthy
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">High BP Readings:</span>
+                      <span className="text-sm font-medium text-red-600">
+                        {insights.highBPCount}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Total Workouts:</span>
+                      <span className="text-sm font-medium text-blue-600">
+                        {insights.totalWorkouts} sessions
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Strength Training:</span>
+                      <span className="text-sm font-medium text-purple-600">
+                        {insights.strengthCount}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Cardio Sessions:</span>
+                      <span className="text-sm font-medium text-orange-600">
+                        {insights.cardioCount}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Data Consistency:</span>
+                      <span className={`text-sm font-medium ${
+                        insights.consistencyPercentage >= 80 ? 'text-green-600' : 
+                        insights.consistencyPercentage >= 60 ? 'text-yellow-600' : 'text-red-600'
+                      }`}>
+                        {insights.consistencyPercentage}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Skill Training:</span>
+                      <span className="text-sm font-medium text-indigo-600">
+                        {insights.skillCount}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
-
-          {(() => {
-            const averages = calculateBPAverages()
-            return (
-              <>
-                <div className="card">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-3 bg-red-100 rounded-lg">
-                      <Heart className="h-6 w-6 text-red-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Daily BP Avg</p>
-                      <p className="text-2xl font-bold text-gray-900">
-                        {averages.daily ? `${averages.daily.systolic}/${averages.daily.diastolic}` : 'N/A'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="card">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-3 bg-orange-100 rounded-lg">
-                      <Heart className="h-6 w-6 text-orange-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Weekly BP Avg</p>
-                      <p className="text-2xl font-bold text-gray-900">
-                        {averages.weekly ? `${averages.weekly.systolic}/${averages.weekly.diastolic}` : 'N/A'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="card">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-3 bg-purple-100 rounded-lg">
-                      <Heart className="h-6 w-6 text-purple-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Monthly BP Avg</p>
-                      <p className="text-2xl font-bold text-gray-900">
-                        {averages.monthly ? `${averages.monthly.systolic}/${averages.monthly.diastolic}` : 'N/A'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )
-          })()}
         </div>
       )}
 
       {/* Charts */}
       {entries.length > 0 && (
-        <div className="space-y-8 mb-8">
-          {/* Blood Pressure Chart */}
-          <div className="card">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-gray-900 flex items-center space-x-2">
-                <Heart className="h-5 w-5 text-red-600" />
-                <span>Blood Pressure Trends</span>
-              </h3>
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm text-gray-600">Time:</span>
-                  <select
-                    value={bpTimeRange}
-                    onChange={(e) => setBpTimeRange(e.target.value as any)}
-                    className="border border-gray-300 rounded-lg px-3 py-1 text-sm"
-                  >
-                    <option value="day">Day</option>
-                    <option value="week">Week</option>
-                    <option value="month">Month</option>
-                    <option value="all">All Time</option>
-                  </select>
+        <div className="mb-8">
+          {/* Charts Header */}
+          <div className="card mb-4">
+            <button
+              onClick={() => setChartsExpanded(!chartsExpanded)}
+              className="flex items-center justify-between w-full text-left"
+            >
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Activity className="h-5 w-5 text-blue-600" />
                 </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm text-gray-600">Arm:</span>
-                  <select
-                    value={bpArmFilter}
-                    onChange={(e) => setBpArmFilter(e.target.value as any)}
-                    className="border border-gray-300 rounded-lg px-3 py-1 text-sm"
-                  >
-                    <option value="both">Both</option>
-                    <option value="right">Right</option>
-                    <option value="left">Left</option>
-                  </select>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Analytics & Charts</h3>
+                  <p className="text-sm text-gray-600">View detailed health trends and patterns</p>
                 </div>
               </div>
-            </div>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={getBPChartData()}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis domain={[60, 'dataMax + 20']} />
-                  <Tooltip />
-                  <Legend />
-                  {bpArmFilter === 'right' || bpArmFilter === 'both' ? (
-                    <>
-                      <Line type="monotone" dataKey="systolicRightAM" stroke="#ef4444" strokeWidth={2} name="Systolic Right AM" />
-                      <Line type="monotone" dataKey="diastolicRightAM" stroke="#fca5a5" strokeWidth={2} name="Diastolic Right AM" />
-                      <Line type="monotone" dataKey="systolicRightPM" stroke="#dc2626" strokeWidth={2} name="Systolic Right PM" />
-                      <Line type="monotone" dataKey="diastolicRightPM" stroke="#fecaca" strokeWidth={2} name="Diastolic Right PM" />
-                    </>
-                  ) : null}
-                  {bpArmFilter === 'left' || bpArmFilter === 'both' ? (
-                    <>
-                      <Line type="monotone" dataKey="systolicLeftAM" stroke="#3b82f6" strokeWidth={2} name="Systolic Left AM" />
-                      <Line type="monotone" dataKey="diastolicLeftAM" stroke="#93c5fd" strokeWidth={2} name="Diastolic Left AM" />
-                      <Line type="monotone" dataKey="systolicLeftPM" stroke="#1d4ed8" strokeWidth={2} name="Systolic Left PM" />
-                      <Line type="monotone" dataKey="diastolicLeftPM" stroke="#bfdbfe" strokeWidth={2} name="Diastolic Left PM" />
-                    </>
-                  ) : null}
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-600">
+                  {chartsExpanded ? 'Hide' : 'Show'} Charts
+                </span>
+                {chartsExpanded ? (
+                  <ChevronDown className="h-5 w-5 text-gray-600" />
+                ) : (
+                  <ChevronRight className="h-5 w-5 text-gray-600" />
+                )}
+              </div>
+            </button>
           </div>
 
-          {/* Weight Chart */}
-          <div className="card">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-gray-900 flex items-center space-x-2">
-                <Scale className="h-5 w-5 text-green-600" />
-                <span>Weight Trends</span>
-              </h3>
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-600">Time:</span>
-                <select
-                  value={weightTimeRange}
-                  onChange={(e) => setWeightTimeRange(e.target.value as any)}
-                  className="border border-gray-300 rounded-lg px-3 py-1 text-sm"
-                >
-                  <option value="day">Day</option>
-                  <option value="week">Week</option>
-                  <option value="month">Month</option>
-                  <option value="all">All Time</option>
-                </select>
+          {/* Charts Content */}
+          {chartsExpanded && (
+            <div className="space-y-8">
+              {/* Blood Pressure Chart */}
+              <div className="card">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-gray-900 flex items-center space-x-2">
+                    <Heart className="h-5 w-5 text-red-600" />
+                    <span>Blood Pressure Trends</span>
+                  </h3>
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm text-gray-600">Time:</span>
+                      <select
+                        value={bpTimeRange}
+                        onChange={(e) => setBpTimeRange(e.target.value as any)}
+                        className="border border-gray-300 rounded-lg px-3 py-1 text-sm"
+                      >
+                        <option value="day">Day</option>
+                        <option value="week">Week</option>
+                        <option value="month">Month</option>
+                        <option value="all">All Time</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm text-gray-600">Arm:</span>
+                      <select
+                        value={bpArmFilter}
+                        onChange={(e) => setBpArmFilter(e.target.value as any)}
+                        className="border border-gray-300 rounded-lg px-3 py-1 text-sm"
+                      >
+                        <option value="both">Both</option>
+                        <option value="right">Right</option>
+                        <option value="left">Left</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={getBPChartData()}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis domain={[60, 'dataMax + 20']} />
+                      <Tooltip />
+                      <Legend />
+                      {bpArmFilter === 'right' || bpArmFilter === 'both' ? (
+                        <>
+                          <Line type="monotone" dataKey="systolicRightAM" stroke="#ef4444" strokeWidth={2} name="Systolic Right AM" />
+                          <Line type="monotone" dataKey="diastolicRightAM" stroke="#fca5a5" strokeWidth={2} name="Diastolic Right AM" />
+                          <Line type="monotone" dataKey="systolicRightPM" stroke="#dc2626" strokeWidth={2} name="Systolic Right PM" />
+                          <Line type="monotone" dataKey="diastolicRightPM" stroke="#fecaca" strokeWidth={2} name="Diastolic Right PM" />
+                        </>
+                      ) : null}
+                      {bpArmFilter === 'left' || bpArmFilter === 'both' ? (
+                        <>
+                          <Line type="monotone" dataKey="systolicLeftAM" stroke="#3b82f6" strokeWidth={2} name="Systolic Left AM" />
+                          <Line type="monotone" dataKey="diastolicLeftAM" stroke="#93c5fd" strokeWidth={2} name="Diastolic Left AM" />
+                          <Line type="monotone" dataKey="systolicLeftPM" stroke="#1d4ed8" strokeWidth={2} name="Systolic Left PM" />
+                          <Line type="monotone" dataKey="diastolicLeftPM" stroke="#bfdbfe" strokeWidth={2} name="Diastolic Left PM" />
+                        </>
+                      ) : null}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Weight Chart */}
+              <div className="card">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-gray-900 flex items-center space-x-2">
+                    <Scale className="h-5 w-5 text-green-600" />
+                    <span>Weight Trends</span>
+                  </h3>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-gray-600">Time:</span>
+                    <select
+                      value={weightTimeRange}
+                      onChange={(e) => setWeightTimeRange(e.target.value as any)}
+                      className="border border-gray-300 rounded-lg px-3 py-1 text-sm"
+                    >
+                      <option value="day">Day</option>
+                      <option value="week">Week</option>
+                      <option value="month">Month</option>
+                      <option value="all">All Time</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={getWeightChartData()}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis domain={[75, 90]} />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="weight" stroke="#10b981" strokeWidth={3} name="Weight (kg)" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             </div>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={getWeightChartData()}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis domain={[75, 90]} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="weight" stroke="#10b981" strokeWidth={3} name="Weight (kg)" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+          )}
         </div>
       )}
 
