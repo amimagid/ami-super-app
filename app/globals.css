@@ -28,4 +28,18 @@
   .input-field {
     @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
   }
+}
+
+@layer utilities {
+  .bg-primary-100 { background-color: #dbeafe; }
+  .text-primary-700 { color: #1d4ed8; }
+  .bg-health-100 { background-color: #fef2f2; }
+  .text-health-600 { color: #dc2626; }
+  .text-health-700 { color: #b91c1c; }
+  .bg-work-100 { background-color: #f0f9ff; }
+  .text-work-600 { color: #0284c7; }
+  .text-work-700 { color: #0369a1; }
+  .bg-tasks-100 { background-color: #f0fdf4; }
+  .text-tasks-600 { color: #16a34a; }
+  .text-tasks-700 { color: #15803d; }
 } 

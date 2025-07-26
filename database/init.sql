@@ -97,7 +97,18 @@ INSERT IGNORE INTO team_members (id, name, email, domain_id) VALUES
 ('dudi-rnd', 'Dudi', 'dudi@company.com', 'rnd'),
 ('ben-l-rnd', 'Ben L', 'ben.l@company.com', 'rnd');
 
+-- My tasks table
+CREATE TABLE IF NOT EXISTS my_tasks (
+    id VARCHAR(255) PRIMARY KEY,
+    title TEXT NOT NULL,
+    completed BOOLEAN NOT NULL DEFAULT FALSE,
+    week_start DATE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 -- Create indexes for better performance
 CREATE INDEX idx_health_entries_date ON health_entries(date);
 CREATE INDEX idx_team_members_domain ON team_members(domain_id);
-CREATE INDEX idx_weekly_statuses_member_week ON weekly_statuses(member_id, week_start); 
+CREATE INDEX idx_weekly_statuses_member_week ON weekly_statuses(member_id, week_start);
+CREATE INDEX idx_my_tasks_week ON my_tasks(week_start); 

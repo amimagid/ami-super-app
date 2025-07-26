@@ -166,6 +166,32 @@ const WeeklyStatus = sequelize.define('WeeklyStatus', {
   ],
 });
 
+const Task = sequelize.define('Task', {
+  id: {
+    type: DataTypes.STRING(255),
+    primaryKey: true,
+    allowNull: false,
+  },
+  title: {
+    type: DataTypes.TEXT,
+    allowNull: false,
+  },
+  completed: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  },
+  weekStart: {
+    type: DataTypes.DATEONLY,
+    allowNull: false,
+  },
+}, {
+  tableName: 'my_tasks',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+});
+
 // Define associations
 TeamMember.belongsTo(WorkDomain, { 
   foreignKey: 'domainId', 

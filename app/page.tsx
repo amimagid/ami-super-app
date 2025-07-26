@@ -1,12 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { Heart, Briefcase, Home } from 'lucide-react'
+import { Heart, Briefcase, Home, CheckSquare } from 'lucide-react'
 import HealthLog from '@/components/HealthLog'
 import WorkStatus from '@/components/WorkStatus'
+import MyTasks from '@/components/MyTasks'
 
 export default function HomePage() {
-  const [activeApp, setActiveApp] = useState<'home' | 'health' | 'work'>('home')
+  const [activeApp, setActiveApp] = useState<'home' | 'health' | 'work' | 'tasks'>('home')
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -48,6 +49,17 @@ export default function HomePage() {
               >
                 <Briefcase size={20} />
                 <span>Work Status</span>
+              </button>
+              <button
+                onClick={() => setActiveApp('tasks')}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeApp === 'tasks'
+                    ? 'bg-tasks-100 text-tasks-700'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <CheckSquare size={20} />
+                <span>My Tasks</span>
               </button>
             </nav>
           </div>
@@ -111,12 +123,35 @@ export default function HomePage() {
                   </svg>
                 </div>
               </div>
+
+              <div 
+                className="card cursor-pointer hover:shadow-xl transition-shadow duration-300"
+                onClick={() => setActiveApp('tasks')}
+              >
+                <div className="flex items-center space-x-4 mb-4">
+                  <div className="p-3 bg-tasks-100 rounded-lg">
+                    <CheckSquare className="text-tasks-600" size={24} />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900">My Tasks</h3>
+                </div>
+                <p className="text-gray-600 mb-4">
+                  Manage your personal weekly tasks with a simple checkbox interface. 
+                  Track pending and completed tasks, edit titles, and organize by week.
+                </p>
+                <div className="flex items-center text-tasks-600 font-medium">
+                  <span>Open My Tasks</span>
+                  <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
             </div>
           </div>
         )}
 
         {activeApp === 'health' && <HealthLog />}
         {activeApp === 'work' && <WorkStatus />}
+        {activeApp === 'tasks' && <MyTasks />}
       </main>
     </div>
   )
