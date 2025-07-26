@@ -114,3 +114,10 @@ temp/
 
 # Docker volumes
 mysql_data/
+
+# Security files (keys, certificates)
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
