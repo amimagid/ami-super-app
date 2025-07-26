@@ -149,6 +149,10 @@ const WeeklyStatus = sequelize.define('WeeklyStatus', {
     type: DataTypes.TEXT,
     allowNull: true,
   },
+  planned: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
 }, {
   tableName: 'weekly_statuses',
   timestamps: true,

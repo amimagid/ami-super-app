@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS weekly_statuses (
     week_start DATE NOT NULL,
     current_week TEXT,
     next_week TEXT,
+    planned TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (member_id) REFERENCES team_members(id) ON DELETE CASCADE,

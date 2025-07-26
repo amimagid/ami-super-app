@@ -33,6 +33,7 @@ interface WeeklyStatus {
   weekStart: string
   currentWeek: string
   nextWeek: string
+  planned: string
 }
 
 interface Domain {
@@ -94,14 +95,59 @@ export default function WorkStatus() {
   const [editingStatus, setEditingStatus] = useState<{
     domainId: string
     memberId: string
-    field: 'currentWeek' | 'nextWeek'
+    field: 'currentWeek' | 'nextWeek' | 'planned'
   } | null>(null)
+  const [showPlannedModal, setShowPlannedModal] = useState(false)
+  const [editingPlannedData, setEditingPlannedData] = useState<{
+    domainId: string
+    memberId: string
+    memberName: string
+    weekStart: string
+    weekDisplay: string
+    planned: string
+  } | null>(null)
+
+  // Color coding for planned tasks
+  const getPlannedTaskColor = (member: TeamMember, plannedContent: string) => {
+    if (!plannedContent || plannedContent.trim() === '') return null
+    
+    // Get all planned tasks for this member across all weeks
+    const allPlannedTasks = member.weeklyStatuses
+      .map(status => status.planned)
+      .filter(planned => planned && planned.trim() !== '')
+    
+    // Find unique planned tasks
+    const uniquePlannedTasks = Array.from(new Set(allPlannedTasks))
+    
+    // Find the index of this planned task
+    const taskIndex = uniquePlannedTasks.indexOf(plannedContent)
+    
+    if (taskIndex === -1) return null
+    
+    // Color palette for different tasks
+    const colors = [
+      'bg-orange-100 text-orange-800 border-orange-200',
+      'bg-blue-100 text-blue-800 border-blue-200',
+      'bg-green-100 text-green-800 border-green-200',
+      'bg-purple-100 text-purple-800 border-purple-200',
+      'bg-pink-100 text-pink-800 border-pink-200',
+      'bg-indigo-100 text-indigo-800 border-indigo-200',
+      'bg-yellow-100 text-yellow-800 border-yellow-200',
+      'bg-red-100 text-red-800 border-red-200',
+      'bg-teal-100 text-teal-800 border-teal-200',
+      'bg-cyan-100 text-cyan-800 border-cyan-200'
+    ]
+    
+    return colors[taskIndex % colors.length]
+  }
   const [editingValues, setEditingValues] = useState<{
     currentWeek: string
     nextWeek: string
+    planned: string
   }>({
     currentWeek: '',
-    nextWeek: ''
+    nextWeek: '',
+    planned: ''
   })
   const [newMember, setNewMember] = useState({
     name: '',
@@ -163,8 +209,8 @@ export default function WorkStatus() {
   const loadWorkStatus = async () => {
     try {
       setLoading(true)
-      const weekStart = getCurrentWeekKey(selectedWeek)
-      const response = await fetch(`/api/work-status?weekStart=${weekStart}`)
+      // Load all weekly statuses for the Gantt view
+      const response = await fetch('/api/work-status')
       if (response.ok) {
         const data = await response.json()
         setDomains(data)
@@ -183,17 +229,35 @@ export default function WorkStatus() {
   }
 
   const getWeekRange = (date: Date) => {
-    const start = startOfWeek(date, { weekStartsOn: 1 }) // Monday
-    const end = endOfWeek(date, { weekStartsOn: 1 })
+    // Custom week calculation: Sunday to Thursday
+    const dayOfWeek = date.getDay() // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    const daysFromSunday = dayOfWeek === 0 ? 0 : dayOfWeek // If it's Sunday, no days to subtract
+    
+    const start = new Date(date)
+    start.setDate(date.getDate() - daysFromSunday)
+    start.setHours(0, 0, 0, 0)
+    
+    const end = new Date(start)
+    end.setDate(start.getDate() + 4) // Thursday is 4 days after Sunday
+    end.setHours(23, 59, 59, 999)
+    
     return {
       start: format(start, 'yyyy-MM-dd'),
       end: format(end, 'yyyy-MM-dd'),
-      display: `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`
+      display: `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')} (Sun-Thu)`
     }
   }
 
   const getCurrentWeekKey = (date: Date) => {
-    return format(startOfWeek(date, { weekStartsOn: 1 }), 'yyyy-MM-dd')
+    // Get the Sunday of the current week
+    const dayOfWeek = date.getDay() // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    const daysFromSunday = dayOfWeek === 0 ? 0 : dayOfWeek
+    
+    const sunday = new Date(date)
+    sunday.setDate(date.getDate() - daysFromSunday)
+    sunday.setHours(0, 0, 0, 0)
+    
+    return format(sunday, 'yyyy-MM-dd')
   }
 
   const addMember = async () => {
@@ -373,12 +437,15 @@ export default function WorkStatus() {
     return member.weeklyStatuses.find(status => status.weekStart === weekStart) || {
       weekStart,
       currentWeek: '',
-      nextWeek: ''
+      nextWeek: '',
+      planned: ''
     }
   }
 
-  const updateStatus = async (domainId: string, memberId: string, field: 'currentWeek' | 'nextWeek', value: string) => {
-    const weekStart = getCurrentWeekKey(selectedWeek)
+
+
+  const updateStatus = async (domainId: string, memberId: string, field: 'currentWeek' | 'nextWeek' | 'planned', value: string, specificWeekStart?: string) => {
+    const weekStart = specificWeekStart || getCurrentWeekKey(selectedWeek)
     
     try {
       const response = await fetch('/api/work-status', {
@@ -394,7 +461,52 @@ export default function WorkStatus() {
       })
       
       if (response.ok) {
-        await loadWorkStatus()
+        // Update local state instead of reloading all data
+        setDomains(prevDomains => 
+          prevDomains.map(domain => {
+            if (domain.id === domainId) {
+              return {
+                ...domain,
+                members: domain.members.map(member => {
+                  if (member.id === memberId) {
+                    const existingStatus = member.weeklyStatuses.find(status => status.weekStart === weekStart)
+                    
+                    if (existingStatus) {
+                      // Update existing status
+                      return {
+                        ...member,
+                        weeklyStatuses: member.weeklyStatuses.map(status => {
+                          if (status.weekStart === weekStart) {
+                            return {
+                              ...status,
+                              [field]: value
+                            }
+                          }
+                          return status
+                        })
+                      }
+                    } else {
+                      // Create new status
+                      const newStatus = {
+                        weekStart,
+                        currentWeek: '',
+                        nextWeek: '',
+                        planned: '',
+                        [field]: value
+                      }
+                      return {
+                        ...member,
+                        weeklyStatuses: [...member.weeklyStatuses, newStatus]
+                      }
+                    }
+                  }
+                  return member
+                })
+              }
+            }
+            return domain
+          })
+        )
       } else {
         throw new Error('Failed to update status')
       }
@@ -506,6 +618,70 @@ export default function WorkStatus() {
     })
   }
 
+  const getCurrentQuarter = () => {
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = now.getMonth() // 0-11
+    
+    if (month >= 0 && month <= 2) return { year, quarter: 1 }
+    if (month >= 3 && month <= 5) return { year, quarter: 2 }
+    if (month >= 6 && month <= 8) return { year, quarter: 3 }
+    return { year, quarter: 4 }
+  }
+
+  const getQuarterWeeks = () => {
+    const { year, quarter } = getCurrentQuarter()
+    const weeks = []
+    
+    // Calculate quarter start and end dates
+    let quarterStart: Date
+    let quarterEnd: Date
+    
+    if (quarter === 1) {
+      quarterStart = new Date(year, 0, 1) // January 1
+      quarterEnd = new Date(year, 2, 31) // March 31
+    } else if (quarter === 2) {
+      quarterStart = new Date(year, 3, 1) // April 1
+      quarterEnd = new Date(year, 5, 30) // June 30
+    } else if (quarter === 3) {
+      quarterStart = new Date(year, 6, 1) // July 1
+      quarterEnd = new Date(year, 8, 30) // September 30
+    } else {
+      quarterStart = new Date(year, 9, 1) // October 1
+      quarterEnd = new Date(year, 11, 31) // December 31
+    }
+    
+    // Generate weeks for the quarter (Sunday-Thursday)
+    let currentDate = new Date(quarterStart)
+    
+    // Find the first Sunday of the quarter
+    while (currentDate.getDay() !== 0) {
+      currentDate.setDate(currentDate.getDate() + 1)
+    }
+    
+    while (currentDate <= quarterEnd) {
+      const weekStart = new Date(currentDate)
+      const weekEnd = new Date(currentDate)
+      weekEnd.setDate(currentDate.getDate() + 4) // Thursday
+      
+      weeks.push({
+        start: format(weekStart, 'yyyy-MM-dd'),
+        end: format(weekEnd, 'yyyy-MM-dd'),
+        display: `${format(weekStart, 'MMM d')} - ${format(weekEnd, 'MMM d')}`,
+        isCurrentWeek: weekStart.getTime() === new Date(getCurrentWeekKey(new Date())).getTime()
+      })
+      
+      // Move to next Sunday
+      currentDate.setDate(currentDate.getDate() + 7)
+    }
+    
+    return weeks
+  }
+
+  const getMemberStatusForWeek = (member: TeamMember, weekStart: string) => {
+    return member.weeklyStatuses.find(status => status.weekStart === weekStart) || null
+  }
+
   return (
     <div className="animate-fade-in">
       {/* Header */}
@@ -541,17 +717,39 @@ export default function WorkStatus() {
           
           <div className="flex items-center space-x-4">
             <Calendar size={20} className="text-gray-600" />
-            <h3 className="text-lg font-semibold text-gray-900">
-              {weekRange.display}
-            </h3>
+            <div className="flex items-center space-x-2">
+              <h3 className="text-lg font-semibold text-gray-900">
+                {weekRange.display}
+              </h3>
+              {getCurrentWeekKey(new Date()) === getCurrentWeekKey(selectedWeek) && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  Current Week
+                </span>
+              )}
+            </div>
           </div>
           
-          <button
-            onClick={() => setSelectedWeek(addWeeks(selectedWeek, 1))}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <ChevronRight size={20} />
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setSelectedWeek(addWeeks(selectedWeek, 1))}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <ChevronRight size={20} />
+            </button>
+            
+            <button
+              onClick={() => setSelectedWeek(new Date())}
+              disabled={getCurrentWeekKey(new Date()) === getCurrentWeekKey(selectedWeek)}
+              className={`flex items-center space-x-2 px-3 py-2 text-sm rounded-lg transition-colors h-10 ${
+                getCurrentWeekKey(new Date()) === getCurrentWeekKey(selectedWeek)
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
+              }`}
+            >
+              <Calendar size={16} />
+              <span>Go to Current Week</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -756,7 +954,7 @@ export default function WorkStatus() {
                               onBlur={async () => {
                                 await updateStatus(domain.id, member.id, 'currentWeek', editingValues.currentWeek)
                                 setEditingStatus(null)
-                                setEditingValues({ currentWeek: '', nextWeek: '' })
+                                setEditingValues({ currentWeek: '', nextWeek: '', planned: '' })
                               }}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter' && e.metaKey) {
@@ -772,7 +970,7 @@ export default function WorkStatus() {
                           ) : (
                             <div 
                               onClick={() => {
-                                setEditingValues({ currentWeek: status.currentWeek, nextWeek: status.nextWeek })
+                                setEditingValues({ currentWeek: status.currentWeek, nextWeek: status.nextWeek, planned: status.planned })
                                 setEditingStatus({
                                   domainId: domain.id,
                                   memberId: member.id,
@@ -801,7 +999,7 @@ export default function WorkStatus() {
                               onBlur={async () => {
                                 await updateStatus(domain.id, member.id, 'nextWeek', editingValues.nextWeek)
                                 setEditingStatus(null)
-                                setEditingValues({ currentWeek: '', nextWeek: '' })
+                                setEditingValues({ currentWeek: '', nextWeek: '', planned: '' })
                               }}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter' && e.metaKey) {
@@ -817,7 +1015,7 @@ export default function WorkStatus() {
                           ) : (
                             <div 
                               onClick={() => {
-                                setEditingValues({ currentWeek: status.currentWeek, nextWeek: status.nextWeek })
+                                setEditingValues({ currentWeek: status.currentWeek, nextWeek: status.nextWeek, planned: status.planned })
                                 setEditingStatus({
                                   domainId: domain.id,
                                   memberId: member.id,
@@ -832,12 +1030,170 @@ export default function WorkStatus() {
                             </div>
                           )}
                         </div>
+                        
+
                       </div>
                     </div>
                   )
                 })}
               </div>
             )}
+
+            {/* Quarter Gantt View */}
+            <div className="mt-8">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-lg font-semibold text-gray-900">
+                  Q{getCurrentQuarter().quarter} {getCurrentQuarter().year} Overview
+                </h4>
+                <span className="text-sm text-gray-500">
+                  Sunday-Thursday weeks
+                </span>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <div className="min-w-max">
+                  {/* Header Row */}
+                  <div className="flex border-b border-gray-200">
+                    <div className="w-48 p-3 font-medium text-gray-700 bg-gray-50 border-r border-gray-200">
+                      Team Member
+                    </div>
+                    {getQuarterWeeks().map((week, index) => (
+                      <div 
+                        key={week.start}
+                        className={`w-32 p-2 text-xs font-medium text-center border-r border-gray-200 ${
+                          week.isCurrentWeek ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-700'
+                        }`}
+                      >
+                        <div className="font-semibold">{week.display}</div>
+                        {week.isCurrentWeek && (
+                          <div className="text-blue-600 font-bold">CURRENT</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Member Rows - Actual Status and Planned Tasks */}
+                  {domain.members.map(member => (
+                    <div key={member.id}>
+                      {/* Actual Status Row */}
+                      <div className="flex border-b border-gray-100 hover:bg-gray-50">
+                        <div className="w-48 p-3 border-r border-gray-200 bg-gray-50">
+                          <div className="font-medium text-gray-900">{member.name}</div>
+                          <div className="text-xs text-gray-500">Actual Status</div>
+                        </div>
+                        {getQuarterWeeks().map(week => {
+                          const status = getMemberStatusForWeek(member, week.start)
+                          const hasStatus = status && (status.currentWeek || status.nextWeek)
+                          
+                          return (
+                            <div 
+                              key={week.start}
+                              className={`w-32 p-2 text-xs border-r border-gray-200 ${
+                                week.isCurrentWeek ? 'bg-blue-25' : ''
+                              }`}
+                            >
+                              {hasStatus ? (
+                                <div className="space-y-1">
+                                  {status.currentWeek && (
+                                    <div className="p-1 bg-green-100 text-green-800 rounded text-xs">
+                                      <div className="font-medium">Current:</div>
+                                      <div className="truncate" title={status.currentWeek}>
+                                        {status.currentWeek.length > 20 
+                                          ? status.currentWeek.substring(0, 20) + '...' 
+                                          : status.currentWeek
+                                        }
+                                      </div>
+                                    </div>
+                                  )}
+                                  {status.nextWeek && (
+                                    <div className="p-1 bg-blue-100 text-blue-800 rounded text-xs">
+                                      <div className="font-medium">Next:</div>
+                                      <div className="truncate" title={status.nextWeek}>
+                                        {status.nextWeek.length > 20 
+                                          ? status.nextWeek.substring(0, 20) + '...' 
+                                          : status.nextWeek
+                                        }
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="text-gray-400 text-center py-2">
+                                  —
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      {/* Planned Tasks Row */}
+                      <div className="flex border-b border-gray-100 hover:bg-gray-50">
+                        <div className="w-48 p-3 border-r border-gray-200 bg-orange-50">
+                          <div className="text-xs text-orange-600">Planned Tasks</div>
+                        </div>
+                        {getQuarterWeeks().map(week => {
+                          const status = getMemberStatusForWeek(member, week.start)
+                          const hasPlanned = status && status.planned
+                          
+                          return (
+                            <div 
+                              key={week.start}
+                              className={`w-32 p-2 text-xs border-r border-gray-200 ${
+                                week.isCurrentWeek ? 'bg-orange-25' : ''
+                              }`}
+                            >
+                              {hasPlanned ? (
+                                <div 
+                                  className={`p-1 rounded text-xs min-h-[60px] flex items-center cursor-pointer transition-colors border ${getPlannedTaskColor(member, status.planned) || 'bg-orange-100 text-orange-800 border-orange-200'} hover:opacity-80`}
+                                  onClick={() => {
+                                    setEditingPlannedData({
+                                      domainId: domain.id,
+                                      memberId: member.id,
+                                      memberName: member.name,
+                                      weekStart: week.start,
+                                      weekDisplay: week.display,
+                                      planned: status.planned || ''
+                                    })
+                                    setShowPlannedModal(true)
+                                  }}
+                                  title="Click to edit planned task"
+                                >
+                                  <div className="truncate" title={status.planned}>
+                                    {status.planned.length > 25 
+                                      ? status.planned.substring(0, 25) + '...' 
+                                      : status.planned
+                                    }
+                                  </div>
+                                </div>
+                              ) : (
+                                <div 
+                                  className="text-gray-400 text-center py-2 min-h-[60px] flex items-center justify-center cursor-pointer hover:bg-orange-50 rounded transition-colors"
+                                  onClick={() => {
+                                    setEditingPlannedData({
+                                      domainId: domain.id,
+                                      memberId: member.id,
+                                      memberName: member.name,
+                                      weekStart: week.start,
+                                      weekDisplay: week.display,
+                                      planned: ''
+                                    })
+                                    setShowPlannedModal(true)
+                                  }}
+                                  title="Click to add planned task"
+                                >
+                                  +
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
               </div>
             </div>
           ))}
@@ -1160,6 +1516,90 @@ export default function WorkStatus() {
                 className="btn-danger flex-1"
               >
                 Delete Domain
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Planned Tasks Modal */}
+      {showPlannedModal && editingPlannedData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-2 bg-orange-100 rounded-lg">
+                <Calendar className="h-6 w-6 text-orange-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Edit Planned Tasks</h3>
+            </div>
+            
+            <div className="mb-6">
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Team Member</label>
+                  <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded border">
+                    {editingPlannedData.memberName}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Week</label>
+                  <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded border">
+                    {editingPlannedData.weekDisplay}
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Planned Tasks
+                </label>
+                <textarea
+                  value={editingPlannedData.planned}
+                  onChange={(e) => setEditingPlannedData({
+                    ...editingPlannedData,
+                    planned: e.target.value
+                  })}
+                  className="input-field w-full"
+                  rows={6}
+                  placeholder="Enter planned tasks for this week..."
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Describe the tasks, goals, or objectives planned for this week.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={() => {
+                  setShowPlannedModal(false)
+                  setEditingPlannedData(null)
+                }}
+                className="btn-secondary flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await updateStatus(
+                      editingPlannedData.domainId,
+                      editingPlannedData.memberId,
+                      'planned',
+                      editingPlannedData.planned,
+                      editingPlannedData.weekStart
+                    )
+                    setShowPlannedModal(false)
+                    setEditingPlannedData(null)
+                  } catch (error) {
+                    console.error('Error saving planned task:', error)
+                    alert('Failed to save planned task. Please try again.')
+                  }
+                }}
+                className="btn-primary flex-1"
+              >
+                Save Planned Task
               </button>
             </div>
           </div>

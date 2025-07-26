@@ -149,13 +149,15 @@ export async function PUT(request: NextRequest) {
         weekStart: body.weekStart,
         currentWeek: '',
         nextWeek: '',
+        planned: '',
       },
     });
     
     // Update the status
     await status.update({
-      currentWeek: body.currentWeek || status.currentWeek,
-      nextWeek: body.nextWeek || status.nextWeek,
+      currentWeek: body.currentWeek !== undefined ? body.currentWeek : status.currentWeek,
+      nextWeek: body.nextWeek !== undefined ? body.nextWeek : status.nextWeek,
+      planned: body.planned !== undefined ? body.planned : status.planned,
     });
     
     return NextResponse.json(status);

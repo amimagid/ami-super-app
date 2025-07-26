@@ -7,6 +7,7 @@ class WeeklyStatus extends Model {
   public weekStart!: Date;
   public currentWeek?: string;
   public nextWeek?: string;
+  public planned?: string;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 }
@@ -35,6 +36,10 @@ WeeklyStatus.init(
       allowNull: true,
     },
     nextWeek: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    planned: {
       type: DataTypes.TEXT,
       allowNull: true,
     },
