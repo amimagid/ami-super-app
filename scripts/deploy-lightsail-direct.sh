@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🚀 Deploying AMI Super App to AWS Lightsail Container Service..."
+echo "🚀 Deploying AMI Super App to AWS Lightsail Container Service (Direct Method)..."
 
 # Check if .env.production exists
 if [ ! -f .env.production ]; then
@@ -21,21 +21,18 @@ fi
 REGION="eu-central-1"
 SERVICE_NAME="ami-super-app"
 CONTAINER_NAME="ami-super-app"
-IMAGE_NAME="ami-super-app:latest"
 
 echo "📦 Building Docker image..."
-docker build -t $IMAGE_NAME .
+docker build -t $CONTAINER_NAME .
 
 if [ $? -ne 0 ]; then
     echo "❌ Docker build failed"
     exit 1
 fi
 
-# Check if container service exists
+# Create container service if it doesn't exist
 echo "🔍 Checking if container service exists..."
-SERVICE_EXISTS=$(aws lightsail get-container-services --region $REGION --service-name $SERVICE_NAME 2>/dev/null | grep -c "serviceName" || echo "0")
-
-if [ "$SERVICE_EXISTS" -eq "0" ]; then
+if ! aws lightsail get-container-services --region $REGION --service-name $SERVICE_NAME &> /dev/null; then
     echo "📋 Creating Lightsail Container Service..."
     aws lightsail create-container-service \
         --region $REGION \
@@ -54,28 +51,13 @@ else
     echo "✅ Container service already exists"
 fi
 
-echo "🏷️ Tagging image for Lightsail..."
-docker tag $IMAGE_NAME public.ecr.aws/lightsail/$REGION/$IMAGE_NAME
-
-echo "📤 Pushing image to Lightsail Container Registry..."
-aws lightsail push-container-image \
-    --region $REGION \
-    --service-name $SERVICE_NAME \
-    --label $CONTAINER_NAME \
-    --image $IMAGE_NAME
-
-if [ $? -ne 0 ]; then
-    echo "❌ Failed to push image to Lightsail"
-    exit 1
-fi
-
-echo "📋 Creating container service deployment..."
+echo "📤 Deploying directly to Lightsail Container Service..."
 aws lightsail create-container-service-deployment \
     --region $REGION \
     --service-name $SERVICE_NAME \
     --containers '{
-        "'$CONTAINER_NAME'": {
-            "image": "'$IMAGE_NAME'",
+        "ami-super-app": {
+            "image": "'$CONTAINER_NAME'",
             "ports": {
                 "3000": "HTTP"
             },
@@ -92,7 +74,7 @@ aws lightsail create-container-service-deployment \
         }
     }' \
     --public-endpoint '{
-        "containerName": "'$CONTAINER_NAME'",
+        "containerName": "ami-super-app",
         "containerPort": 3000,
         "healthCheck": {
             "healthyThreshold": 2,

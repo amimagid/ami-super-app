@@ -219,6 +219,18 @@ export default function HealthLog() {
     return match ? [parseInt(match[1]), parseInt(match[2])] : null
   }
 
+  const getAverageBP = (rightBP: string | null, leftBP: string | null) => {
+    const right = parseBP(rightBP)
+    const left = parseBP(leftBP)
+    if (!right && !left) return null
+    if (!right) return left
+    if (!left) return right
+    // Average the readings
+    const avgSystolic = Math.round((right[0] + left[0]) / 2)
+    const avgDiastolic = Math.round((right[1] + left[1]) / 2)
+    return [avgSystolic, avgDiastolic]
+  }
+
   // Calculate BP averages for different time periods
   const calculateBPAverages = () => {
     const now = new Date()
@@ -248,11 +260,9 @@ export default function HealthLog() {
 
       entries.forEach(entry => {
         const readings = [
-          parseBP(entry.bpAMRight),
-          parseBP(entry.bpAMLeft),
-          parseBP(entry.bpPMRight),
-          parseBP(entry.bpPMLeft)
-        ].filter(Boolean)
+          getAverageBP(entry.bpAMRight, entry.bpAMLeft),
+          getAverageBP(entry.bpPMRight, entry.bpPMLeft)
+        ].filter((r): r is [number, number] => Array.isArray(r))
 
         readings.forEach(([systolic, diastolic]) => {
           totalSystolic += systolic
@@ -1078,13 +1088,13 @@ export default function HealthLog() {
                     <div className="space-y-2">
                       <div className="flex items-center space-x-4">
                         {entry.bpAMRight && (
-                          <div className={`flex items-center space-x-2 ${getBPStatus(...parseBP(entry.bpAMRight) || [0, 0])}`}>
+                          <div className={`flex items-center space-x-2 ${getBPStatus(...((parseBP(entry.bpAMRight) as [number, number]) || [0, 0]))}`}>
                             <Heart className="h-4 w-4" />
                             <span className="font-medium">Right: {entry.bpAMRight}</span>
                           </div>
                         )}
                         {entry.bpAMLeft && (
-                          <div className={`flex items-center space-x-2 ${getBPStatus(...parseBP(entry.bpAMLeft) || [0, 0])}`}>
+                          <div className={`flex items-center space-x-2 ${getBPStatus(...((parseBP(entry.bpAMLeft) as [number, number]) || [0, 0]))}`}>
                             <Heart className="h-4 w-4" />
                             <span className="font-medium">Left: {entry.bpAMLeft}</span>
                           </div>
@@ -1142,13 +1152,13 @@ export default function HealthLog() {
                     <div className="space-y-2">
                       <div className="flex items-center space-x-4">
                         {entry.bpPMRight && (
-                          <div className={`flex items-center space-x-2 ${getBPStatus(...parseBP(entry.bpPMRight) || [0, 0])}`}>
+                          <div className={`flex items-center space-x-2 ${getBPStatus(...((parseBP(entry.bpPMRight) as [number, number]) || [0, 0]))}`}>
                             <Heart className="h-4 w-4" />
                             <span className="font-medium">Right: {entry.bpPMRight}</span>
                           </div>
                         )}
                         {entry.bpPMLeft && (
-                          <div className={`flex items-center space-x-2 ${getBPStatus(...parseBP(entry.bpPMLeft) || [0, 0])}`}>
+                          <div className={`flex items-center space-x-2 ${getBPStatus(...((parseBP(entry.bpPMLeft) as [number, number]) || [0, 0]))}`}>
                             <Heart className="h-4 w-4" />
                             <span className="font-medium">Left: {entry.bpPMLeft}</span>
                           </div>

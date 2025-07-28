@@ -185,6 +185,15 @@ const Task = sequelize.define('Task', {
     type: DataTypes.DATEONLY,
     allowNull: false,
   },
+  deadline: {
+    type: DataTypes.DATEONLY,
+    allowNull: true,
+  },
+  taskType: {
+    type: DataTypes.STRING(50),
+    allowNull: false,
+    defaultValue: 'work',
+  },
 }, {
   tableName: 'my_tasks',
   timestamps: true,

@@ -17,7 +17,7 @@ export async function GET() {
   try {
     await initDB();
     const entries = await HealthEntry.findAll({
-      order: [['timestamp', 'DESC']],
+      order: [['date', 'DESC']],
     });
     
     return NextResponse.json(entries);
@@ -38,13 +38,17 @@ export async function POST(request: NextRequest) {
     
     const entry = await HealthEntry.create({
       id: body.id,
-      type: body.type,
-      value: body.value,
-      systolic: body.systolic,
-      diastolic: body.diastolic,
-      arm: body.arm,
-      timestamp: body.timestamp,
-      note: body.note,
+      date: body.date,
+      weight: body.weight,
+      bpAMRight: body.bpAMRight,
+      bpAMLeft: body.bpAMLeft,
+      bpAMTime: body.bpAMTime,
+      bpAMNotes: body.bpAMNotes,
+      bpPMRight: body.bpPMRight,
+      bpPMLeft: body.bpPMLeft,
+      bpPMTime: body.bpPMTime,
+      bpPMNotes: body.bpPMNotes,
+      workout: body.workout,
     });
     
     return NextResponse.json(entry, { status: 201 });
@@ -72,13 +76,17 @@ export async function PUT(request: NextRequest) {
     }
     
     await entry.update({
-      type: body.type,
-      value: body.value,
-      systolic: body.systolic,
-      diastolic: body.diastolic,
-      arm: body.arm,
-      timestamp: body.timestamp,
-      note: body.note,
+      date: body.date,
+      weight: body.weight,
+      bpAMRight: body.bpAMRight,
+      bpAMLeft: body.bpAMLeft,
+      bpAMTime: body.bpAMTime,
+      bpAMNotes: body.bpAMNotes,
+      bpPMRight: body.bpPMRight,
+      bpPMLeft: body.bpPMLeft,
+      bpPMTime: body.bpPMTime,
+      bpPMNotes: body.bpPMNotes,
+      workout: body.workout,
     });
     
     return NextResponse.json(entry);

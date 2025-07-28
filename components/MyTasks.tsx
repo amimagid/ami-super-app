@@ -19,17 +19,22 @@ interface Task {
   title: string
   completed: boolean
   weekStart: string
+  deadline?: string
+  taskType: string
   createdAt: string
   updatedAt: string
 }
 
 export default function MyTasks() {
   const [selectedWeek, setSelectedWeek] = useState(new Date())
+  const [activeTab, setActiveTab] = useState<'work' | 'private'>('work')
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [newTaskTitle, setNewTaskTitle] = useState('')
+  const [newTaskDeadline, setNewTaskDeadline] = useState('')
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
+  const [editingDeadline, setEditingDeadline] = useState('')
 
   // Get week range for display
   const getWeekRange = (date: Date) => {
@@ -51,7 +56,7 @@ export default function MyTasks() {
   const loadTasks = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/my-tasks?weekStart=${selectedWeekKey}`)
+      const response = await fetch(`/api/my-tasks?weekStart=${selectedWeekKey}&taskType=${activeTab}`)
       if (response.ok) {
         const data = await response.json()
         setTasks(data)
@@ -78,6 +83,8 @@ export default function MyTasks() {
         body: JSON.stringify({
           title: newTaskTitle.trim(),
           weekStart: selectedWeekKey,
+          deadline: newTaskDeadline || undefined,
+          taskType: activeTab,
         }),
       })
 
@@ -85,6 +92,7 @@ export default function MyTasks() {
         const newTask = await response.json()
         setTasks(prev => [...prev, newTask])
         setNewTaskTitle('')
+        setNewTaskDeadline('')
       } else {
         console.error('Failed to add task')
       }
@@ -125,7 +133,7 @@ export default function MyTasks() {
     }
   }
 
-  // Update task title
+  // Update task title and deadline
   const updateTask = async () => {
     if (!editingTask || !editingTitle.trim()) return
 
@@ -137,6 +145,7 @@ export default function MyTasks() {
         },
         body: JSON.stringify({
           title: editingTitle.trim(),
+          deadline: editingDeadline || undefined,
         }),
       })
 
@@ -144,12 +153,13 @@ export default function MyTasks() {
         setTasks(prev => 
           prev.map(t => 
             t.id === editingTask.id 
-              ? { ...t, title: editingTitle.trim() }
+              ? { ...t, title: editingTitle.trim(), deadline: editingDeadline || undefined }
               : t
           )
         )
         setEditingTask(null)
         setEditingTitle('')
+        setEditingDeadline('')
       } else {
         console.error('Failed to update task')
       }
@@ -175,10 +185,18 @@ export default function MyTasks() {
     }
   }
 
-  // Load tasks when week changes
+  // Load tasks when week or tab changes
   useEffect(() => {
     loadTasks()
-  }, [selectedWeek])
+  }, [selectedWeek, activeTab])
+
+  // Helper function to check if deadline has passed
+  const isDeadlinePassed = (deadline: string) => {
+    const deadlineDate = new Date(deadline)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    return deadlineDate < today
+  }
 
   const completedTasks = tasks.filter(task => task.completed)
   const pendingTasks = tasks.filter(task => !task.completed)
@@ -239,6 +257,34 @@ export default function MyTasks() {
         </div>
       </div>
 
+      {/* Task Type Tabs */}
+      <div className="mb-6">
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('work')}
+              className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                activeTab === 'work'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <span>Work Tasks</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('private')}
+              className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                activeTab === 'private'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <span>Private Tasks</span>
+            </button>
+          </nav>
+        </div>
+      </div>
+
       {/* Add New Task */}
       <div className="card mb-6">
         <div className="flex items-center space-x-3">
@@ -253,6 +299,13 @@ export default function MyTasks() {
             }}
             placeholder="Add a new task..."
             className="input-field flex-1"
+          />
+          <input
+            type="date"
+            value={newTaskDeadline}
+            onChange={(e) => setNewTaskDeadline(e.target.value)}
+            className="input-field w-48"
+            placeholder="Deadline (optional)"
           />
           <button
             onClick={addTask}
@@ -269,9 +322,15 @@ export default function MyTasks() {
       <div className="space-y-6">
         {/* Pending Tasks */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Pending Tasks ({pendingTasks.length})
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Pending Tasks ({pendingTasks.length})
+            </h3>
+            <div className="text-xs text-gray-500 flex items-center space-x-1">
+              <span>Ordered by deadline</span>
+              <span className="text-blue-500">↑</span>
+            </div>
+          </div>
           
           {loading ? (
             <div className="text-center py-8">
@@ -307,10 +366,18 @@ export default function MyTasks() {
                           if (e.key === 'Escape') {
                             setEditingTask(null)
                             setEditingTitle('')
+                            setEditingDeadline('')
                           }
                         }}
                         className="input-field flex-1"
                         autoFocus
+                      />
+                      <input
+                        type="date"
+                        value={editingDeadline}
+                        onChange={(e) => setEditingDeadline(e.target.value)}
+                        className="input-field w-40"
+                        placeholder="Deadline"
                       />
                       <button
                         onClick={updateTask}
@@ -322,6 +389,7 @@ export default function MyTasks() {
                         onClick={() => {
                           setEditingTask(null)
                           setEditingTitle('')
+                          setEditingDeadline('')
                         }}
                         className="p-1 text-gray-400 hover:text-gray-600"
                       >
@@ -330,12 +398,25 @@ export default function MyTasks() {
                     </div>
                   ) : (
                     <>
-                      <span className="flex-1 text-gray-900">{task.title}</span>
+                      <div className="flex-1">
+                        <span className={`text-gray-900 ${task.deadline && isDeadlinePassed(task.deadline) ? 'text-red-600 font-medium' : ''}`}>
+                          {task.title}
+                        </span>
+                        {task.deadline && (
+                          <div className="flex items-center space-x-2 mt-1">
+                            <span className="text-xs text-gray-500">Deadline:</span>
+                            <span className={`text-xs ${isDeadlinePassed(task.deadline) ? 'text-red-600 font-medium' : 'text-gray-600'}`}>
+                              {format(new Date(task.deadline), 'MMM d, yyyy')}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                       <div className="flex items-center space-x-1">
                         <button
                           onClick={() => {
                             setEditingTask(task)
                             setEditingTitle(task.title)
+                            setEditingDeadline(task.deadline || '')
                           }}
                           className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
                         >
@@ -359,9 +440,15 @@ export default function MyTasks() {
         {/* Completed Tasks */}
         {completedTasks.length > 0 && (
           <div className="card">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Completed Tasks ({completedTasks.length})
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Completed Tasks ({completedTasks.length})
+              </h3>
+              <div className="text-xs text-gray-500 flex items-center space-x-1">
+                <span>Click checkmark to reopen</span>
+                <span className="text-blue-500">↑</span>
+              </div>
+            </div>
             
             <div className="space-y-2">
               {completedTasks.map(task => (
@@ -369,11 +456,22 @@ export default function MyTasks() {
                   <button
                     onClick={() => toggleTask(task.id)}
                     className="text-green-600 hover:text-green-700 transition-colors"
+                    title="Click to reopen task"
                   >
                     <CheckCircle size={20} />
                   </button>
                   
-                  <span className="flex-1 text-gray-900 line-through">{task.title}</span>
+                  <div className="flex-1">
+                    <span className="text-gray-900 line-through">{task.title}</span>
+                    {task.deadline && (
+                      <div className="flex items-center space-x-2 mt-1">
+                        <span className="text-xs text-gray-500">Deadline:</span>
+                        <span className="text-xs text-gray-600 line-through">
+                          {format(new Date(task.deadline), 'MMM d, yyyy')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                   
                   <div className="flex items-center space-x-1">
                     <button

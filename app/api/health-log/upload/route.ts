@@ -116,10 +116,12 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Error uploading health data:', error)
-    console.error('Error details:', error.message)
-    console.error('Error stack:', error.stack)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    const errorStack = error instanceof Error ? error.stack : 'No stack trace'
+    console.error('Error details:', errorMessage)
+    console.error('Error stack:', errorStack)
     return NextResponse.json(
-      { error: 'Failed to upload health data', details: error.message },
+      { error: 'Failed to upload health data', details: errorMessage },
       { status: 500 }
     )
   }

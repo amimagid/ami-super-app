@@ -1,8 +1,9 @@
-import HealthEntry from '@/models/HealthEntry';
+import { HealthEntry } from '@/models/HealthEntry';
 import WorkDomain from '@/models/WorkDomain';
 import TeamMember from '@/models/TeamMember';
 import WeeklyStatus from '@/models/WeeklyStatus';
 import sequelize from './database';
+import { Op } from 'sequelize';
 
 // Health Entries
 export const healthService = {
@@ -37,11 +38,11 @@ export const healthService = {
   async getEntriesByDateRange(startDate: Date, endDate: Date) {
     const entries = await HealthEntry.findAll({
       where: {
-        timestamp: {
-          [sequelize.Op.between]: [startDate, endDate],
+        date: {
+          [Op.between]: [startDate, endDate],
         },
       },
-      order: [['timestamp', 'DESC']],
+      order: [['date', 'DESC']],
     });
     return entries.map(entry => entry.toJSON());
   },

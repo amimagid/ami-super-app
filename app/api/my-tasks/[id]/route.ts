@@ -21,12 +21,22 @@ const Task = sequelize.define('Task', {
     type: 'DATE',
     allowNull: false,
   },
+  deadline: {
+    type: 'DATE',
+    allowNull: true,
+  },
+  taskType: {
+    type: 'VARCHAR(50)',
+    allowNull: false,
+    defaultValue: 'work',
+  },
 }, {
   tableName: 'my_tasks',
   timestamps: true,
   underscored: false,
   createdAt: 'created_at',
   updatedAt: 'updated_at',
+  freezeTableName: true,
 })
 
 // PUT - Update a task
@@ -37,7 +47,7 @@ export async function PUT(
   try {
     const { id } = params
     const body = await request.json()
-    const { title, completed } = body
+    const { title, completed, deadline } = body
 
     const task = await Task.findByPk(id)
     if (!task) {
@@ -46,10 +56,13 @@ export async function PUT(
 
     // Update only the fields that are provided
     if (title !== undefined) {
-      task.title = title
+      (task as any).title = title
     }
     if (completed !== undefined) {
-      task.completed = completed
+      (task as any).completed = completed
+    }
+    if (deadline !== undefined) {
+      (task as any).deadline = deadline
     }
 
     await task.save()

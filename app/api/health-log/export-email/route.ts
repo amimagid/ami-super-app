@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     const { pdfDataUrl, entries } = body
 
     // Create transporter
-    const transporter = nodemailer.createTransporter({
+    const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
         user: process.env.EMAIL_USER, // You'll need to set this in .env

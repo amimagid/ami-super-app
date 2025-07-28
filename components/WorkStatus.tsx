@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { 
   Plus, 
   Users, 
@@ -17,7 +17,9 @@ import {
   UserPlus,
   MessageCircle,
   CheckCircle,
-  FlaskConical
+  FlaskConical,
+  BarChart3,
+  Info
 } from 'lucide-react'
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from 'date-fns'
 
@@ -177,18 +179,27 @@ export default function WorkStatus() {
   })
 
   const [showEditDomainModal, setShowEditDomainModal] = useState(false)
-  const [editingDomain, setEditingDomain] = useState<{
-    id: string
-    name: string
-    iconName: string
-    color: string
-    bgColor: string
-  } | null>(null)
+  const [editingDomain, setEditingDomain] = useState<Domain | null>(null)
   const [editingDomainValues, setEditingDomainValues] = useState({
     name: '',
     iconName: 'shield',
     color: 'text-blue-600',
     bgColor: 'bg-blue-100'
+  })
+
+  // Popover state
+  const [popoverData, setPopoverData] = useState<{
+    isOpen: boolean
+    x: number
+    y: number
+    content: string
+    title: string
+  }>({
+    isOpen: false,
+    x: 0,
+    y: 0,
+    content: '',
+    title: ''
   })
 
   const [showDeleteDomainModal, setShowDeleteDomainModal] = useState(false)
@@ -198,6 +209,7 @@ export default function WorkStatus() {
     memberCount: number
   } | null>(null)
 
+  const [mainView, setMainView] = useState<'teams' | 'gantt'>('teams')
   const [activeTab, setActiveTab] = useState<string>('')
   const [loading, setLoading] = useState(true)
 
@@ -682,6 +694,22 @@ export default function WorkStatus() {
     return member.weeklyStatuses.find(status => status.weekStart === weekStart) || null
   }
 
+  // Popover functions
+  const openPopover = (event: React.MouseEvent, title: string, content: string) => {
+    event.stopPropagation()
+    setPopoverData({
+      isOpen: true,
+      x: event.clientX,
+      y: event.clientY,
+      content,
+      title
+    })
+  }
+
+  const closePopover = () => {
+    setPopoverData(prev => ({ ...prev, isOpen: false }))
+  }
+
   return (
     <div className="animate-fade-in">
       {/* Header */}
@@ -753,10 +781,40 @@ export default function WorkStatus() {
         </div>
       </div>
 
-      {/* Domain Tabs */}
-      {domains.length > 0 && (
+      {/* Main View Tabs */}
+      <div className="mb-8">
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setMainView('teams')}
+              className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                mainView === 'teams'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Users size={20} />
+              <span>Teams Status</span>
+            </button>
+            <button
+              onClick={() => setMainView('gantt')}
+              className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                mainView === 'gantt'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <BarChart3 size={20} />
+              <span>All Teams Gantt</span>
+            </button>
+          </nav>
+        </div>
+      </div>
+
+      {/* Teams View */}
+      {mainView === 'teams' && domains.length > 0 && (
         <div className="mb-8">
-          {/* Tab Navigation */}
+          {/* Domain Tab Navigation */}
           <div className="border-b border-gray-200">
             <nav className="-mb-px flex space-x-8 overflow-x-auto">
               {getSortedDomains().map(domain => (
@@ -1078,7 +1136,15 @@ export default function WorkStatus() {
                       {/* Actual Status Row */}
                       <div className="flex border-b border-gray-100 hover:bg-gray-50">
                         <div className="w-48 p-3 border-r border-gray-200 bg-gray-50">
-                          <div className="font-medium text-gray-900">{member.name}</div>
+                          <div className="font-medium text-gray-900 flex items-center space-x-1">
+                            {member.name}
+                            <button
+                              onClick={(e) => openPopover(e, `${member.name}`, `${member.name}\n${domain.name} Domain`)}
+                              className="text-gray-500 hover:text-gray-700 transition-colors"
+                            >
+                              <Info size={14} />
+                            </button>
+                          </div>
                           <div className="text-xs text-gray-500">Actual Status</div>
                         </div>
                         {getQuarterWeeks().map(week => {
@@ -1096,8 +1162,16 @@ export default function WorkStatus() {
                                 <div className="space-y-1">
                                   {status.currentWeek && (
                                     <div className="p-1 bg-green-100 text-green-800 rounded text-xs">
-                                      <div className="font-medium">Current:</div>
-                                      <div className="truncate" title={status.currentWeek}>
+                                      <div className="font-medium flex items-center justify-between">
+                                        <span>Current:</span>
+                                        <button
+                                          onClick={(e) => openPopover(e, `${member.name} - Current Week Status`, `${status.currentWeek}\n\nWeek: ${week.display}\nDomain: ${domain.name}`)}
+                                          className="text-green-600 hover:text-green-800 transition-colors"
+                                        >
+                                          <Info size={12} />
+                                        </button>
+                                      </div>
+                                      <div className="truncate">
                                         {status.currentWeek.length > 20 
                                           ? status.currentWeek.substring(0, 20) + '...' 
                                           : status.currentWeek
@@ -1107,8 +1181,16 @@ export default function WorkStatus() {
                                   )}
                                   {status.nextWeek && (
                                     <div className="p-1 bg-blue-100 text-blue-800 rounded text-xs">
-                                      <div className="font-medium">Next:</div>
-                                      <div className="truncate" title={status.nextWeek}>
+                                      <div className="font-medium flex items-center justify-between">
+                                        <span>Next:</span>
+                                        <button
+                                          onClick={(e) => openPopover(e, `${member.name} - Next Week Status`, `${status.nextWeek}\n\nWeek: ${week.display}\nDomain: ${domain.name}`)}
+                                          className="text-blue-600 hover:text-blue-800 transition-colors"
+                                        >
+                                          <Info size={12} />
+                                        </button>
+                                      </div>
+                                      <div className="truncate">
                                         {status.nextWeek.length > 20 
                                           ? status.nextWeek.substring(0, 20) + '...' 
                                           : status.nextWeek
@@ -1157,13 +1239,24 @@ export default function WorkStatus() {
                                     })
                                     setShowPlannedModal(true)
                                   }}
-                                  title="Click to edit planned task"
+                                  title={`Click to edit planned task\n\n${member.name} - Planned Tasks\n\n${status.planned}\n\nWeek: ${week.display}\nDomain: ${domain.name}`}
                                 >
-                                  <div className="truncate" title={status.planned}>
-                                    {status.planned.length > 25 
-                                      ? status.planned.substring(0, 25) + '...' 
-                                      : status.planned
-                                    }
+                                  <div className="flex items-center justify-between">
+                                    <div className="truncate flex-1">
+                                      {status.planned.length > 25 
+                                        ? status.planned.substring(0, 25) + '...' 
+                                        : status.planned
+                                      }
+                                    </div>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        openPopover(e, `${member.name} - Planned Tasks`, `${status.planned}\n\nWeek: ${week.display}\nDomain: ${domain.name}`)
+                                      }}
+                                      className="text-orange-600 hover:text-orange-800 transition-colors ml-1"
+                                    >
+                                      <Info size={12} />
+                                    </button>
                                   </div>
                                 </div>
                               ) : (
@@ -1197,6 +1290,176 @@ export default function WorkStatus() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* All Teams Gantt View */}
+      {mainView === 'gantt' && (
+        <div className="mb-8">
+          <div className="card">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center space-x-3">
+                <div className="p-3 bg-blue-100 rounded-lg">
+                  <BarChart3 className="text-blue-600" size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">All Teams Gantt View</h3>
+                  <p className="text-sm text-gray-600">
+                    Quarterly overview of all team members across all domains
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Gantt Table */}
+            <div className="overflow-x-auto overflow-y-auto max-h-96">
+              <table className="w-full border-collapse">
+                <thead className="sticky top-0 z-10">
+                  <tr className="border-b-2 border-gray-300 bg-gray-50">
+                    <th className="w-64 p-3 font-semibold text-gray-900 border-r border-gray-200 bg-gray-50 text-left">
+                      Team Member
+                    </th>
+                    {getQuarterWeeks().map(week => (
+                      <th key={week.start} className="w-32 p-3 text-center font-medium text-gray-900 border-r border-gray-200 bg-gray-50">
+                        <div className="text-xs">{week.display}</div>
+                        {week.isCurrentWeek && (
+                          <div className="text-xs text-green-600 font-medium">Current</div>
+                        )}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {getSortedDomains().map(domain => (
+                    <React.Fragment key={domain.id}>
+                      {/* Domain Header */}
+                      <tr className="bg-gray-100 border-b border-gray-200">
+                        <td className="w-64 p-3 font-semibold text-gray-900 border-r border-gray-200">
+                          <div className="flex items-center space-x-2">
+                            <div className={`p-1.5 rounded ${domain.bgColor}`}>
+                              <div className={`${domain.color} text-sm`}>
+                                {getIcon(domain.iconName)}
+                              </div>
+                            </div>
+                            <span className="flex items-center space-x-1">
+                              {domain.name}
+                              <button
+                                onClick={(e) => openPopover(e, `${domain.name} Domain`, `${domain.name} Domain\n${domain.members.length} team members`)}
+                                className="text-gray-500 hover:text-gray-700 transition-colors"
+                              >
+                                <Info size={14} />
+                              </button>
+                            </span>
+                            <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
+                              {domain.members.length}
+                            </span>
+                          </div>
+                        </td>
+                        {getQuarterWeeks().map(week => (
+                          <td key={week.start} className="w-32 p-3 text-center text-gray-500 border-r border-gray-200">
+                            —
+                          </td>
+                        ))}
+                      </tr>
+
+                      {/* Member Rows */}
+                      {domain.members.map(member => (
+                        <tr key={member.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="w-64 p-3 border-r border-gray-200 bg-gray-50">
+                            <div className="font-medium text-gray-900 flex items-center space-x-1">
+                              {member.name}
+                              <button
+                                onClick={(e) => openPopover(e, `${member.name}`, `${member.name}\n${domain.name} Domain`)}
+                                className="text-gray-500 hover:text-gray-700 transition-colors"
+                              >
+                                <Info size={14} />
+                              </button>
+                            </div>
+                            <div className="text-xs text-gray-500">{domain.name}</div>
+                          </td>
+                          {getQuarterWeeks().map(week => {
+                            const status = getMemberStatusForWeek(member, week.start)
+                            const hasStatus = status && (status.currentWeek || status.nextWeek || status.planned)
+                            
+                            return (
+                              <td key={week.start} className="w-32 p-2 border-r border-gray-200">
+                                {hasStatus ? (
+                                  <div className="space-y-1">
+                                    {status.currentWeek && (
+                                      <div className="text-xs bg-blue-100 text-blue-800 p-1 rounded">
+                                        <div className="font-medium flex items-center justify-between">
+                                          <span>Current:</span>
+                                          <button
+                                            onClick={(e) => openPopover(e, `${member.name} - Current Week Status`, `${status.currentWeek}\n\nWeek: ${week.display}\nDomain: ${domain.name}`)}
+                                            className="text-blue-600 hover:text-blue-800 transition-colors"
+                                          >
+                                            <Info size={12} />
+                                          </button>
+                                        </div>
+                                        <div className="truncate">
+                                          {status.currentWeek.length > 20 
+                                            ? status.currentWeek.substring(0, 20) + '...' 
+                                            : status.currentWeek
+                                          }
+                                        </div>
+                                      </div>
+                                    )}
+                                    {status.nextWeek && (
+                                      <div className="text-xs bg-green-100 text-green-800 p-1 rounded">
+                                        <div className="font-medium flex items-center justify-between">
+                                          <span>Next:</span>
+                                          <button
+                                            onClick={(e) => openPopover(e, `${member.name} - Next Week Status`, `${status.nextWeek}\n\nWeek: ${week.display}\nDomain: ${domain.name}`)}
+                                            className="text-green-600 hover:text-green-800 transition-colors"
+                                          >
+                                            <Info size={12} />
+                                          </button>
+                                        </div>
+                                        <div className="truncate">
+                                          {status.nextWeek.length > 20 
+                                            ? status.nextWeek.substring(0, 20) + '...' 
+                                            : status.nextWeek
+                                          }
+                                        </div>
+                                      </div>
+                                    )}
+                                    {status.planned && (
+                                      <div className="text-xs bg-orange-100 text-orange-800 p-1 rounded">
+                                        <div className="font-medium flex items-center justify-between">
+                                          <span>Planned:</span>
+                                          <button
+                                            onClick={(e) => openPopover(e, `${member.name} - Planned Tasks`, `${status.planned}\n\nWeek: ${week.display}\nDomain: ${domain.name}`)}
+                                            className="text-orange-600 hover:text-orange-800 transition-colors"
+                                          >
+                                            <Info size={12} />
+                                          </button>
+                                        </div>
+                                        <div className="truncate">
+                                          {status.planned.length > 20 
+                                            ? status.planned.substring(0, 20) + '...' 
+                                            : status.planned
+                                          }
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="text-gray-400 text-center py-2 text-xs">
+                                    —
+                                  </div>
+                                )}
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1604,6 +1867,39 @@ export default function WorkStatus() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Info Popover */}
+      {popoverData.isOpen && (
+        <div 
+          className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-4 max-w-sm"
+          style={{
+            left: Math.min(popoverData.x + 10, window.innerWidth - 320),
+            top: Math.min(popoverData.y + 10, window.innerHeight - 200)
+          }}
+        >
+          <div className="flex items-start justify-between mb-2">
+            <h4 className="text-sm font-semibold text-gray-900">{popoverData.title}</h4>
+            <button
+              onClick={closePopover}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <div className="text-sm text-gray-700 whitespace-pre-line">
+            {popoverData.content}
+          </div>
+          <div className="absolute top-0 left-0 w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-b-4 border-b-gray-200 transform -translate-x-1/2 -translate-y-full"></div>
+        </div>
+      )}
+
+      {/* Backdrop to close popover */}
+      {popoverData.isOpen && (
+        <div 
+          className="fixed inset-0 z-40" 
+          onClick={closePopover}
+        />
       )}
 
     </div>

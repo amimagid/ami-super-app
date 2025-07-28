@@ -1,6 +1,32 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Next.js 14+ uses app directory by default
+  // Enable standalone output for Docker deployment
+  output: 'standalone',
+  
+
+  
+  // Security headers
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'origin-when-cross-origin',
+          },
+        ],
+      },
+    ]
+  },
 }
  
 module.exports = nextConfig 

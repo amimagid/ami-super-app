@@ -5,6 +5,7 @@ import { Heart, Briefcase, Home, CheckSquare } from 'lucide-react'
 import HealthLog from '@/components/HealthLog'
 import WorkStatus from '@/components/WorkStatus'
 import MyTasks from '@/components/MyTasks'
+import HomeDashboard from '@/components/HomeDashboard'
 
 export default function HomePage() {
   const [activeApp, setActiveApp] = useState<'home' | 'health' | 'work' | 'tasks'>('home')
@@ -69,84 +70,7 @@ export default function HomePage() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeApp === 'home' && (
-          <div className="animate-fade-in">
-            <div className="text-center mb-12">
-              <h2 className="text-4xl font-bold text-gray-900 mb-4">
-                Welcome to Your Super App
-              </h2>
-              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                Manage your health tracking and work status all in one place
-              </p>
-            </div>
-            
-            <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-              <div 
-                className="card cursor-pointer hover:shadow-xl transition-shadow duration-300"
-                onClick={() => setActiveApp('health')}
-              >
-                <div className="flex items-center space-x-4 mb-4">
-                  <div className="p-3 bg-health-100 rounded-lg">
-                    <Heart className="text-health-600" size={24} />
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-900">Health Log</h3>
-                </div>
-                <p className="text-gray-600 mb-4">
-                  Track your weight, blood pressure, workouts, and more. View daily logs, 
-                  upload CSV data, and analyze trends with beautiful charts.
-                </p>
-                <div className="flex items-center text-health-600 font-medium">
-                  <span>Open Health Log</span>
-                  <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </div>
-
-              <div 
-                className="card cursor-pointer hover:shadow-xl transition-shadow duration-300"
-                onClick={() => setActiveApp('work')}
-              >
-                <div className="flex items-center space-x-4 mb-4">
-                  <div className="p-3 bg-work-100 rounded-lg">
-                    <Briefcase className="text-work-600" size={24} />
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-900">Work Status</h3>
-                </div>
-                <p className="text-gray-600 mb-4">
-                  Manage weekly status updates across Platform Security, Threat Protection, 
-                  Compliance, and Advanced Protection domains with team member tracking.
-                </p>
-                <div className="flex items-center text-work-600 font-medium">
-                  <span>Open Work Status</span>
-                  <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </div>
-
-              <div 
-                className="card cursor-pointer hover:shadow-xl transition-shadow duration-300"
-                onClick={() => setActiveApp('tasks')}
-              >
-                <div className="flex items-center space-x-4 mb-4">
-                  <div className="p-3 bg-tasks-100 rounded-lg">
-                    <CheckSquare className="text-tasks-600" size={24} />
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-900">My Tasks</h3>
-                </div>
-                <p className="text-gray-600 mb-4">
-                  Manage your personal weekly tasks with a simple checkbox interface. 
-                  Track pending and completed tasks, edit titles, and organize by week.
-                </p>
-                <div className="flex items-center text-tasks-600 font-medium">
-                  <span>Open My Tasks</span>
-                  <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-          </div>
+          <HomeDashboard onNavigate={setActiveApp} />
         )}
 
         {activeApp === 'health' && <HealthLog />}

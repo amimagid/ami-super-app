@@ -1,255 +1,210 @@
-# 🚀 AWS Lightsail Deployment Guide
+# AWS Lightsail Container Service Deployment Guide
 
-This guide will help you deploy your AMI Super App to AWS Lightsail.
+This guide will help you deploy your Super App to AWS Lightsail Container Service using Docker.
 
 ## Prerequisites
 
-1. **AWS Account**: You need an active AWS account
-2. **AWS CLI**: Install and configure AWS CLI on your local machine
-3. **Docker**: Ensure Docker is installed on your Lightsail instance
-4. **Domain (Optional)**: A domain name for your application
+1. **AWS CLI installed and configured**
+   ```bash
+   # Install AWS CLI (if not already installed)
+   curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+   unzip awscliv2.zip
+   sudo ./aws/install
 
-## Step 1: Create a Lightsail Instance
+   # Configure AWS CLI
+   aws configure
+   ```
 
-### 1.1 Launch a Container Instance
-1. Go to AWS Lightsail Console
-2. Click "Create instance"
-3. Choose "Container" as the platform
-4. Select a region close to your users
-5. Choose "Linux/Unix" platform
-6. Select "Container" blueprint
-7. Choose your instance plan (recommended: 2GB RAM, 1 vCPU minimum)
-8. Name your instance (e.g., "ami-super-app")
-9. Click "Create instance"
+2. **Docker installed**
+   ```bash
+   # Install Docker (if not already installed)
+   curl -fsSL https://get.docker.com -o get-docker.sh
+   sudo sh get-docker.sh
+   ```
 
-### 1.2 Connect to Your Instance
+3. **Environment variables configured**
+   - Copy `env.production.example` to `.env.production`
+   - Fill in your production values
+
+## Quick Deployment
+
+### 1. Build the Docker Image
+
 ```bash
-# Download the SSH key from Lightsail console
-# Then connect via SSH
-ssh -i ~/.ssh/your-key.pem ec2-user@your-instance-ip
+# Build locally first to test
+./scripts/build-docker.sh
+
+# Or build manually
+docker build -t ami-super-app .
 ```
 
-## Step 2: Prepare Your Instance
+### 2. Deploy to Lightsail
 
-### 2.1 Install Docker and Docker Compose
 ```bash
-# Update system
-sudo yum update -y
-
-# Install Docker
-sudo yum install -y docker
-
-# Start and enable Docker service
-sudo systemctl start docker
-sudo systemctl enable docker
-
-# Add user to docker group
-sudo usermod -aG docker ec2-user
-
-# Install Docker Compose
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
-
-# Logout and login again for group changes to take effect
-exit
-# SSH back in
+# Deploy using the automated script
+./scripts/deploy-lightsail.sh
 ```
 
-### 2.2 Install Git
+## Manual Deployment Steps
+
+### 1. Create Lightsail Container Service
+
 ```bash
-sudo yum install -y git
+aws lightsail create-container-service \
+    --service-name ami-super-app-service \
+    --power small \
+    --scale 1
 ```
 
-## Step 3: Deploy Your Application
+### 2. Build and Push Image
 
-### 3.1 Clone Your Repository
 ```bash
-git clone https://github.com/yourusername/ami-super-app.git
-cd ami-super-app
+# Build the image
+docker build -t ami-super-app .
+
+# Push to Lightsail
+aws lightsail push-container-image \
+    --service-name ami-super-app-service \
+    --label ami-super-app \
+    --image ami-super-app:latest
 ```
 
-### 3.2 Create Production Environment File
+### 3. Deploy the Container
+
 ```bash
-cp env.production.example .env.production
-nano .env.production
+aws lightsail create-container-service-deployment \
+    --service-name ami-super-app-service \
+    --containers '{
+        "ami-super-app-container": {
+            "image": ":ami-super-app.ami-super-app-service.1",
+            "ports": {
+                "3000": "HTTP"
+            },
+            "environment": {
+                "NODE_ENV": "production",
+                "DB_HOST": "your-db-host",
+                "DB_PORT": "3306",
+                "DB_USER": "your-db-user",
+                "DB_PASSWORD": "your-db-password",
+                "DB_NAME": "your-db-name"
+            }
+        }
+    }' \
+    --public-endpoint '{
+        "containerName": "ami-super-app-container",
+        "containerPort": 3000,
+        "healthCheck": {
+            "healthyThreshold": 2,
+            "unhealthyThreshold": 2,
+            "timeoutSeconds": 2,
+            "intervalSeconds": 5,
+            "path": "/",
+            "successCodes": "200-499"
+        }
+    }'
 ```
 
-**Fill in your production values:**
-```bash
+## Environment Variables
+
+Create a `.env.production` file with the following variables:
+
+```env
 # Database Configuration
-DB_ROOT_PASSWORD=your_very_secure_root_password
+DB_ROOT_PASSWORD=your_secure_root_password_here
 DB_USER=superapp_user
-DB_PASSWORD=your_very_secure_db_password
+DB_PASSWORD=your_secure_db_password_here
 DB_NAME=ami_super_app
 
-# Email Configuration
+# Email Configuration (for health log export feature)
 EMAIL_USER=your-email@gmail.com
 EMAIL_PASS=your-16-character-app-password
+
+# Optional: Custom domain (if you have one)
+# DOMAIN=yourdomain.com
 ```
 
-### 3.3 Deploy the Application
-```bash
-# Make deployment script executable
-chmod +x scripts/deploy.sh
+## Database Setup
 
-# Run deployment
-./scripts/deploy.sh
-```
+### Option 1: Use Lightsail Database (Recommended)
 
-## Step 4: Configure Firewall and Networking
+1. Create a Lightsail database instance
+2. Use the provided endpoint and credentials
+3. Update your environment variables
 
-### 4.1 Configure Lightsail Firewall
-1. Go to your Lightsail instance
-2. Click on "Networking" tab
-3. Add these firewall rules:
-   - **HTTP (80)**: Allow from anywhere
-   - **HTTPS (443)**: Allow from anywhere (if using SSL)
-   - **Custom (3000)**: Allow from anywhere (for direct app access)
+### Option 2: Use External Database
 
-### 4.2 Access Your Application
-Your app will be available at:
-- `http://your-lightsail-ip:3000`
+- AWS RDS
+- External MySQL server
+- Any MySQL-compatible database
 
-## Step 5: Set Up Domain and SSL (Optional)
+## Monitoring and Logs
 
-### 5.1 Configure Domain
-1. Point your domain to your Lightsail instance IP
-2. Add a DNS A record: `yourdomain.com` → `your-lightsail-ip`
-
-### 5.2 Set Up SSL with Nginx
-```bash
-# Install Nginx
-sudo yum install -y nginx
-
-# Start and enable Nginx
-sudo systemctl start nginx
-sudo systemctl enable nginx
-
-# Create Nginx configuration
-sudo nano /etc/nginx/conf.d/ami-super-app.conf
-```
-
-**Add this configuration:**
-```nginx
-server {
-    listen 80;
-    server_name yourdomain.com www.yourdomain.com;
-
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
+### Check Service Status
 
 ```bash
-# Test Nginx configuration
-sudo nginx -t
-sudo systemctl restart nginx
-
-# Install Certbot for SSL
-sudo yum install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
+aws lightsail get-container-services --service-name ami-super-app-service
 ```
 
-## Step 6: Monitoring and Maintenance
+### View Logs
 
-### 6.1 Check Application Status
 ```bash
-# Check container status
-docker-compose -f docker-compose.prod.yml ps
-
-# View logs
-docker-compose -f docker-compose.prod.yml logs -f app
-docker-compose -f docker-compose.prod.yml logs -f mysql
+aws lightsail get-container-log --service-name ami-super-app-service --container-name ami-super-app-container
 ```
 
-### 6.2 Backup Database
-```bash
-# Create backup script
-nano backup-db.sh
-```
+### Scale the Service
 
-**Add this content:**
 ```bash
-#!/bin/bash
-DATE=$(date +%Y%m%d_%H%M%S)
-docker exec ami-super-app-mysql mysqldump -u root -p$DB_ROOT_PASSWORD ami_super_app > backup_$DATE.sql
-```
-
-### 6.3 Update Application
-```bash
-# Pull latest changes
-git pull origin main
-
-# Redeploy
-./scripts/deploy.sh
+aws lightsail create-container-service-deployment \
+    --service-name ami-super-app-service \
+    --scale 2
 ```
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Port 3000 not accessible**
-   - Check Lightsail firewall rules
-   - Verify container is running: `docker ps`
+1. **Build fails**: Check Dockerfile and .dockerignore
+2. **Container won't start**: Check environment variables and database connectivity
+3. **Health check fails**: Verify the application is listening on port 3000
 
-2. **Database connection issues**
-   - Check environment variables in `.env.production`
-   - Verify MySQL container is healthy: `docker logs ami-super-app-mysql`
+### Debug Commands
 
-3. **Email not working**
-   - Verify Gmail app password is correct
-   - Check email environment variables
-
-### Useful Commands
 ```bash
-# Restart services
-docker-compose -f docker-compose.prod.yml restart
+# Check container status
+aws lightsail get-container-services --service-name ami-super-app-service
 
-# View real-time logs
-docker-compose -f docker-compose.prod.yml logs -f
+# View recent deployments
+aws lightsail get-container-services --service-name ami-super-app-service --query 'containerServices[0].currentDeployment'
 
-# Access MySQL directly
-docker exec -it ami-super-app-mysql mysql -u root -p
-
-# Check disk space
-df -h
-
-# Monitor system resources
-htop
-# Note: If htop is not available, use: top
+# Check logs
+aws lightsail get-container-log --service-name ami-super-app-service --container-name ami-super-app-container
 ```
-
-## Security Considerations
-
-1. **Strong Passwords**: Use strong, unique passwords for database
-2. **Firewall**: Only open necessary ports
-3. **SSL**: Always use HTTPS in production
-4. **Updates**: Keep your instance and Docker images updated
-5. **Backups**: Regular database backups
-6. **Monitoring**: Set up basic monitoring and alerts
 
 ## Cost Optimization
 
-- **Instance Size**: Start with 2GB RAM, scale up if needed
-- **Storage**: Monitor usage, delete old backups
-- **Bandwidth**: Monitor data transfer costs
-- **Snapshots**: Use snapshots for backups instead of running additional storage
+- Use `small` power for development/testing
+- Use `medium` or `large` for production
+- Consider auto-scaling based on traffic
+- Monitor usage in AWS Console
+
+## Security Considerations
+
+1. Use strong passwords for database
+2. Enable HTTPS (Lightsail provides this automatically)
+3. Keep environment variables secure
+4. Regularly update dependencies
+5. Monitor access logs
+
+## Backup and Recovery
+
+1. **Database**: Set up automated backups
+2. **Application**: Use version control (Git)
+3. **Configuration**: Store environment variables securely
+4. **Data**: Export health data regularly
 
 ## Support
 
-If you encounter issues:
-1. Check the logs: `docker-compose -f docker-compose.prod.yml logs`
-2. Verify all environment variables are set correctly
-3. Ensure all ports are open in Lightsail firewall
-4. Check that your domain DNS is pointing to the correct IP
-
-Your AMI Super App should now be running in the cloud! 🎉 
+For issues with:
+- **AWS Lightsail**: Check AWS documentation
+- **Application**: Check logs and error messages
+- **Database**: Verify connectivity and credentials 
